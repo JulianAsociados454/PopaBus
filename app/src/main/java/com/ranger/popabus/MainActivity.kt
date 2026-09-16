@@ -60,6 +60,15 @@ import android.os.Build
 import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.auth.FirebaseAuth
 
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
@@ -89,6 +98,30 @@ data class ParaderoOficial(
     val geohash: String = "",
     val estado: String = "activo"
 )
+
+// Representa el historial de viajes (Colección 'recorridos')
+data class RecorridoOficial(
+    val id_usuario: String = "",
+    val id_bus: String = "",
+    val id_ruta: String = "",
+    val hora_inicio: Long = 0L,
+    val hora_fin: Long? = null, // Nullable porque al iniciar no ha terminado
+    val estado: String = "en_curso"
+)
+
+// Representa el histórico de GPS (Colección 'posiciones_gps')
+data class PosicionGpsOficial(
+    val id_recorrido: String = "",
+    val latitud: Double = 0.0,
+    val longitud: Double = 0.0,
+    val geohash: String = "",
+    val velocidad: Double? = null,
+    val hora_lectura: Long = 0L
+)
+
+
+
+
 
 fun obtenerIconoBus(context: Context, vectorResId: Int): BitmapDescriptor? {
     MapsInitializer.initialize(context)
@@ -216,18 +249,62 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PopaBusTheme {
-                // Estado que controla qué pantalla estamos viendo
-                var rolSeleccionado by remember { mutableStateOf("NINGUNO") }
+                // EVOLUCIÓN: Ahora controlamos pantallas completas, no solo roles
+                var pantallaActual by remember { mutableStateOf("LOGIN") }
 
-                // Ruteo simple de Compose
-                when (rolSeleccionado) {
-                    "NINGUNO" -> PantallaSeleccionRol(
-                        onConductorSeleccionado = { rolSeleccionado = "CONDUCTOR" },
-                        onPasajeroSeleccionado = { rolSeleccionado = "PASAJERO" }
+                when (pantallaActual) {
+                    "LOGIN" -> PantallaLogin(
+                        onIrARegistro = { pantallaActual = "REGISTRO" },
+                        onLoginExitoso = { rolRecibido ->
+                            // El .trim() elimina espacios en blanco accidentales de Firebase
+                            if (rolRecibido.trim().lowercase() == "conductor") {
+                                pantallaActual = "CONDUCTOR"
+                            } else {
+                                pantallaActual = "PASAJERO"
+                            }
+                        }
                     )
-                    "PASAJERO" -> MapaPopabus() // Tu código intacto
+                    "REGISTRO" -> PantallaRegistro(
+                        onVolverLogin = { pantallaActual = "LOGIN" },
+                        onRegistroExitoso = { uidGenerado, nombreIngresado, rolElegido ->
+                            // 1. Instanciamos la base de datos
+                            val database = FirebaseDatabase.getInstance()
+
+                            // 2. Apuntamos a la colección 'usuarios' y creamos un "hijo" con el UID exacto de Auth
+                            val refUsuario = database.getReference("usuarios").child(uidGenerado)
+
+                            // 3. Armamos el paquete de datos según tu diccionario de datos (MER)
+                            val datosUsuario = mapOf(
+                                "nombre_completo" to nombreIngresado,
+                                "rol" to rolElegido,
+                                "activo" to true,
+                                "fecha_registro" to ServerValue.TIMESTAMP
+                            )
+
+                            // 4. Guardamos en la base de datos y avanzamos de pantalla
+                            refUsuario.setValue(datosUsuario).addOnCompleteListener { tarea ->
+                                if (tarea.isSuccessful) {
+                                    // Cuando se guarde exitosamente, enviamos al usuario al menú
+                                    pantallaActual = "SELECCION_ROL"
+                                }
+                            }
+                        }
+                    )
+                    "SELECCION_ROL" -> PantallaSeleccionRol(
+                        onConductorSeleccionado = { pantallaActual = "CONDUCTOR" },
+                        onPasajeroSeleccionado = { pantallaActual = "PASAJERO" }
+                    )
+                    "PASAJERO" -> MapaPopabus(
+                        onCerrarSesion = {
+                            FirebaseAuth.getInstance().signOut()
+                            pantallaActual = "LOGIN"
+                        }
+                    )
                     "CONDUCTOR" -> PantallaConductor(
-                        onVolver = { rolSeleccionado = "NINGUNO" }
+                        onCerrarSesion = {
+                            FirebaseAuth.getInstance().signOut()
+                            pantallaActual = "LOGIN"
+                        }
                     )
                 }
             }
@@ -256,10 +333,203 @@ fun PantallaSeleccionRol(onConductorSeleccionado: () -> Unit, onPasajeroSeleccio
         }
     }
 }
+@Composable
+fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
+    val context = LocalContext.current
+    val auth = remember { FirebaseAuth.getInstance() }
+    val database = remember { FirebaseDatabase.getInstance() }
+
+    var correo by remember { mutableStateOf("") }
+    var contrasena by remember { mutableStateOf("") }
+    var cargando by remember { mutableStateOf(false) } // Para mostrar retroalimentación visual
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Iniciar Sesión", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = correo,
+            onValueChange = { correo = it },
+            label = { Text("Correo electrónico") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = contrasena,
+            onValueChange = { contrasena = it },
+            label = { Text("Contraseña") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation()
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = {
+                if (correo.isNotEmpty() && contrasena.isNotEmpty()) {
+                    cargando = true
+                    // 1. Firebase Auth valida las credenciales
+                    auth.signInWithEmailAndPassword(correo, contrasena)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val uid = auth.currentUser?.uid
+                                if (uid != null) {
+                                    // 2. Si Auth es exitoso, buscamos el rol en Realtime Database
+                                    database.getReference("usuarios").child(uid).child("rol").get()
+                                        .addOnSuccessListener { snapshot ->
+                                            cargando = false
+                                            // Extraemos el rol (o asumimos "pasajero" por defecto)
+                                            val rol = snapshot.getValue(String::class.java) ?: "pasajero"
+                                            Toast.makeText(context, "Bienvenido", Toast.LENGTH_SHORT).show()
+                                            // 3. Enviamos el rol al enrutador de MainActivity
+                                            onLoginExitoso(rol)
+                                        }
+                                        .addOnFailureListener { error ->
+                                            cargando = false
+                                            Toast.makeText(context, "Error al leer perfil: ${error.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                }
+                            } else {
+                                cargando = false
+                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                } else {
+                    Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando // Deshabilita el botón mientras carga para evitar dobles clics
+        ) {
+            Text(if (cargando) "Validando..." else "Ingresar")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(onClick = onIrARegistro) {
+            Text("¿No tienes cuenta? Regístrate aquí")
+        }
+    }
+}
+
+
+@Composable
+fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, String, String) -> Unit) {
+    val context = LocalContext.current
+    val auth = remember { FirebaseAuth.getInstance() } // Instancia de Firebase Auth
+
+    var nombre by remember { mutableStateOf("") }
+    var correo by remember { mutableStateOf("") }
+    var contrasena by remember { mutableStateOf("") }
+    var rolSeleccionado by remember { mutableStateOf("pasajero") }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Crear Cuenta", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = nombre,
+            onValueChange = { nombre = it },
+            label = { Text("Nombre completo") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = correo,
+            onValueChange = { correo = it },
+            label = { Text("Correo electrónico") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = contrasena,
+            onValueChange = { contrasena = it },
+            label = { Text("Contraseña") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation()
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Selección de Rol
+        Text("¿Qué tipo de usuario eres?", style = MaterialTheme.typography.bodyLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Button(
+                onClick = { rolSeleccionado = "pasajero" },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (rolSeleccionado == "pasajero") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Text("Pasajero")
+            }
+            Button(
+                onClick = { rolSeleccionado = "conductor" },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (rolSeleccionado == "conductor") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Text("Conductor")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = {
+                // LÓGICA DE REGISTRO EN FIREBASE
+                if (correo.isNotEmpty() && contrasena.isNotEmpty() && nombre.isNotEmpty()) {
+                    auth.createUserWithEmailAndPassword(correo, contrasena)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val user = auth.currentUser
+                                Toast.makeText(context, "¡Usuario creado exitosamente!", Toast.LENGTH_SHORT).show()
+                                // Enviamos los datos para usarlos en el siguiente paso (Días 8-9)
+                                onRegistroExitoso(user?.uid ?: "", nombre, rolSeleccionado)
+                            } else {
+                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                } else {
+                    Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Registrarme")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(onClick = onVolverLogin) {
+            Text("¿Ya tienes cuenta? Inicia sesión aquí")
+        }
+    }
+}
+
+
 
 @SuppressLint("MissingPermission")
 @Composable
-fun PantallaConductor(onVolver: () -> Unit) {
+fun PantallaConductor(onCerrarSesion: () -> Unit) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
@@ -268,7 +538,18 @@ fun PantallaConductor(onVolver: () -> Unit) {
     var permisoConcedido by remember { mutableStateOf(false) }
     var ultimaUbicacion by remember { mutableStateOf("Esperando GPS...") }
 
+    // NUEVO ESTADO: Controla el Ciclo de Vida del Viaje
+    var enRecorrido by remember { mutableStateOf(false) }
+
+    // Instancias de Firebase
+    val auth = remember { FirebaseAuth.getInstance() }
+    val database = remember { FirebaseDatabase.getInstance() }
+
+    // Guarda el ID del viaje generado por Firebase
+    var idRecorridoActual by remember { mutableStateOf<String?>(null) }
     // Solicitud de permisos
+
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permisos ->
@@ -295,22 +576,40 @@ fun PantallaConductor(onVolver: () -> Unit) {
             val busRef = database.getReference("BusesActivos/Bus_01")
 
             // 1. RECEPTOR DE COMANDOS ADB (LINUX)
+// 1. RECEPTOR DE COMANDOS ADB (LINUX)
             mockReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
-                    usandoMock = true // Apagamos temporalmente el hardware real
+                    usandoMock = true
                     val lat = intent.getFloatExtra("lat", 0f).toDouble()
                     val lng = intent.getFloatExtra("lng", 0f).toDouble()
 
                     if (lat != 0.0 && lng != 0.0) {
                         ultimaUbicacion = "📡 MOCK ADB:\n$lat, \n$lng"
-                        val hash = calcularGeohash(lat, lng) // <-- NUEVA LÍNEA
+                        val hash = calcularGeohash(lat, lng)
+                        val timestampActual = ServerValue.TIMESTAMP
+
+                        // A. ACTUALIZAR TIEMPO REAL (BusesActivos)
                         val datosBus = mapOf(
                             "latitud" to lat,
                             "longitud" to lng,
-                            "geohash" to hash, // <-- NUEVA LÍNEA
-                            "timestamp" to ServerValue.TIMESTAMP
+                            "geohash" to hash,
+                            "timestamp" to timestampActual
                         )
                         busRef.setValue(datosBus)
+
+                        // B. BIFURCACIÓN HISTÓRICA (posiciones_gps)
+                        if (idRecorridoActual != null) {
+                            val refPosiciones = database.getReference("posiciones_gps").child(idRecorridoActual!!)
+                            val nuevaPosicion = PosicionGpsOficial(
+                                id_recorrido = idRecorridoActual!!,
+                                latitud = lat,
+                                longitud = lng,
+                                geohash = hash,
+                                velocidad = 0.0, // Mock por defecto
+                                hora_lectura = System.currentTimeMillis()
+                            )
+                            refPosiciones.push().setValue(nuevaPosicion)
+                        }
                     }
                 }
             }
@@ -326,24 +625,36 @@ fun PantallaConductor(onVolver: () -> Unit) {
 
             locationCallback = object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
-                    if (usandoMock) return // Si ADB está controlando, ignoramos el GPS real
+                    if (usandoMock) return
 
                     for (location in locationResult.locations) {
                         ultimaUbicacion = "${location.latitude}, \n${location.longitude}"
 
-                        // 1. PRIMERO calculamos el hash (DEBE estar antes del mapOf)
                         val hash = calcularGeohash(location.latitude, location.longitude)
+                        val timestampActual = ServerValue.TIMESTAMP
 
-                        // 2. DESPUÉS lo agregamos al mapa
+                        // A. ACTUALIZAR TIEMPO REAL (BusesActivos)
                         val datosBus = mapOf(
                             "latitud" to location.latitude,
                             "longitud" to location.longitude,
                             "geohash" to hash,
-                            "timestamp" to ServerValue.TIMESTAMP
+                            "timestamp" to timestampActual
                         )
-
-                        // 3. ENVIAMOS a Firebase
                         busRef.setValue(datosBus)
+
+                        // B. BIFURCACIÓN HISTÓRICA (posiciones_gps)
+                        if (idRecorridoActual != null) {
+                            val refPosiciones = database.getReference("posiciones_gps").child(idRecorridoActual!!)
+                            val nuevaPosicion = PosicionGpsOficial(
+                                id_recorrido = idRecorridoActual!!,
+                                latitud = location.latitude,
+                                longitud = location.longitude,
+                                geohash = hash,
+                                velocidad = location.speed.toDouble(),
+                                hora_lectura = System.currentTimeMillis()
+                            )
+                            refPosiciones.push().setValue(nuevaPosicion)
+                        }
                     }
                 }
             }
@@ -362,43 +673,99 @@ fun PantallaConductor(onVolver: () -> Unit) {
 
 
 
-    // UI del Conductor
+// NUEVA UI DEL CONDUCTOR
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("Panel del Conductor", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         Text(if (permisoConcedido) "✅ Permisos de GPS OK" else "⚠️ Falta permiso GPS")
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text("Coordenada actual:")
         Text(ultimaUbicacion, style = MaterialTheme.typography.bodyLarge)
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(
-            onClick = { transmitiendo = !transmitiendo },
-            enabled = permisoConcedido
-        ) {
-            Text(if (transmitiendo) "🛑 Detener Transmisión" else "▶️ Iniciar Transmisión")
+        // LÓGICA VISUAL DEL RECORRIDO
+        if (!enRecorrido) {
+            // Botón para INICIAR
+            Button(
+                onClick = {
+                    // 1. Obtenemos el UID real del conductor
+                    val uid = auth.currentUser?.uid ?: "CONDUCTOR_DESCONOCIDO"
+
+                    // 2. Apuntamos a la colección 'recorridos'
+                    val refRecorridos = database.getReference("recorridos")
+                    val nuevoRecorridoRef = refRecorridos.push() // Firebase genera un ID único
+
+                    val idGenerado = nuevoRecorridoRef.key
+
+                    // 3. Armamos el paquete según el diccionario de datos
+                    val nuevoRecorrido = RecorridoOficial(
+                        id_usuario = uid,
+                        id_bus = "BUS_1",
+                        id_ruta = "RUTA_1",
+                        hora_inicio = System.currentTimeMillis(), // Hora exacta
+                        hora_fin = null,
+                        estado = "en_curso"
+                    )
+
+                    // 4. Guardamos en Firebase
+                    nuevoRecorridoRef.setValue(nuevoRecorrido).addOnSuccessListener {
+                        idRecorridoActual = idGenerado // Memoria del viaje activo
+                        enRecorrido = true
+                        transmitiendo = true // Arranca el GPS
+                        Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                    }.addOnFailureListener {
+                        Toast.makeText(context, "Error de conexión", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                enabled = permisoConcedido,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+            ) {
+                Text("▶️ Iniciar Recorrido Oficial")
+            }
+        } else {
+            // ... (Tu código de cuando está en recorrido sigue igual) ...else {
+            // Interfaz cuando el viaje está EN CURSO
+            Text("🟢 Viaje en Curso", color = Color.Green, style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    enRecorrido = false
+                    transmitiendo = false // El GPS se apaga al terminar
+                    ultimaUbicacion = "Viaje finalizado."
+                    // Etapa 6: Aquí cerraremos el registro en Firebase
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+            ) {
+                Text("🛑 Finalizar Recorrido")
+            }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(48.dp))
 
-        Button(onClick = {
-            transmitiendo = false // Forzamos apagar antes de salir
-            onVolver()
-        }) {
-            Text("Volver al Inicio")
+        // Botón de Cerrar Sesión
+        Button(
+            onClick = {
+                transmitiendo = false
+                onCerrarSesion()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+        ) {
+            Text("Cerrar Sesión")
         }
     }
 }
 
 @SuppressLint("MissingPermission")
 @Composable
-fun MapaPopabus() {
+fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -502,31 +869,53 @@ fun MapaPopabus() {
         onDispose { query.removeEventListener(listener) }
     }
 
-    // 3. EL MAPA
+// 3. EL MAPA Y EL RADAR VISUAL
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-    GoogleMap(
-        modifier = Modifier.fillMaxSize(),
-        cameraPositionState = cameraPositionState,
-        properties = mapProperties
-    ) {
-// Marcador del paradero actualizado
-        Marker(
-            state = MarkerState(position = LatLng(paraderoCentro.latitud, paraderoCentro.longitud)),
-            title = paraderoCentro.nombre,
-            snippet = paraderoCentro.direccion
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
 
-        // 4. DIBUJAMOS TODOS LOS BUSES ACTIVOS SIMULTÁNEAMENTE
-        busesEnZona.forEach { (idBus, destino) ->
-            // La función key() obliga a Compose a recordar la animación de CADA bus por separado
-            key(idBus) {
-                MarcadorBusAnimado(
-                    idBus = idBus,
-                    destinoLatLng = destino,
-                    icono = iconoBus
-                )
+        // 1. El Mapa va al fondo
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = mapProperties
+        ) {
+            Marker(
+                state = MarkerState(position = LatLng(paraderoCentro.latitud, paraderoCentro.longitud)),
+                title = paraderoCentro.nombre,
+                snippet = paraderoCentro.direccion
+            )
+
+            busesEnZona.forEach { (idBus, destino) ->
+                key(idBus) {
+                    MarcadorBusAnimado(
+                        idBus = idBus,
+                        destinoLatLng = destino,
+                        icono = iconoBus
+                    )
+                }
             }
         }
-    }
-}
+
+        // 2. El Radar va en la parte superior (TopCenter)
+        Text(
+            text = "Buses en radar: ${busesEnZona.size}",
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(32.dp),
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color.Red
+        )
+
+        // 3. El Botón de Cerrar Sesión va en la parte inferior (BottomCenter)
+        Button(
+            onClick = onCerrarSesion,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+        ) {
+            Text("Cerrar Sesión")
+        }
+    } // Fin del Box
+} // Fin de la función MapaPopabus
