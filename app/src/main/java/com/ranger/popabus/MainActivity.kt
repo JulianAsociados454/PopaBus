@@ -1,5 +1,4 @@
 package com.ranger.popabus
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -69,6 +68,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.auth.FirebaseAuth
+import com.google.maps.android.compose.Polyline
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+
+
+
+
 
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
@@ -118,7 +130,31 @@ data class PosicionGpsOficial(
     val velocidad: Double? = null,
     val hora_lectura: Long = 0L
 )
+// --- NUEVOS MODELOS PARA EL SPRINT 4 ---
 
+// Representa un punto para dibujar la línea (Polyline) de la ruta por las calles
+data class CoordenadaRuta(
+    val latitud: Double = 0.0,
+    val longitud: Double = 0.0
+)
+
+// Representa la relación y el orden de un paradero dentro de una ruta (Diccionario de Datos)
+data class ParaderoRuta(
+    val orden: Int = 0
+)
+
+// Representa la ruta completa (Colección 'rutas')
+data class RutaOficial(
+    val id: String = "",
+    val nombre_ruta: String = "",
+    val origen: String = "",
+    val destino: String = "",
+    val estado: String = "activa",
+    // El diccionario de paraderos como definimos en las reglas de negocio
+    val paraderos: Map<String, ParaderoRuta> = emptyMap(),
+    // La geometría estructurada para que Compose pueda dibujar la línea (Polyline)
+    val geometria: List<CoordenadaRuta> = emptyList()
+)
 
 
 
@@ -256,11 +292,11 @@ class MainActivity : ComponentActivity() {
                     "LOGIN" -> PantallaLogin(
                         onIrARegistro = { pantallaActual = "REGISTRO" },
                         onLoginExitoso = { rolRecibido ->
-                            // El .trim() elimina espacios en blanco accidentales de Firebase
-                            if (rolRecibido.trim().lowercase() == "conductor") {
-                                pantallaActual = "CONDUCTOR"
-                            } else {
-                                pantallaActual = "PASAJERO"
+                            val rolNormalizado = rolRecibido.trim().lowercase()
+                            when (rolNormalizado) {
+                                "conductor" -> pantallaActual = "CONDUCTOR"
+                                "administrador" -> pantallaActual = "ADMINISTRADOR"
+                                else -> pantallaActual = "PASAJERO"
                             }
                         }
                     )
@@ -306,6 +342,15 @@ class MainActivity : ComponentActivity() {
                             pantallaActual = "LOGIN"
                         }
                     )
+
+                    "ADMINISTRADOR" -> PantallaAdministrador(
+                        onCerrarSesion = {
+                            FirebaseAuth.getInstance().signOut()
+                            pantallaActual = "LOGIN"
+                        }
+                    )
+
+
                 }
             }
         }
@@ -736,10 +781,24 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 
             Button(
                 onClick = {
+                    // 1. Apuntamos al viaje actual en Firebase y lo actualizamos
+                    if (idRecorridoActual != null) {
+                        val refRecorrido = database.getReference("recorridos").child(idRecorridoActual!!)
+                        val actualizaciones = mapOf(
+                            "hora_fin" to ServerValue.TIMESTAMP,
+                            "estado" to "finalizado"
+                        )
+
+                        refRecorrido.updateChildren(actualizaciones).addOnSuccessListener {
+                            Toast.makeText(context, "Viaje Finalizado Correctamente", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    // 2. Apagamos el motor del GPS y restauramos la UI
                     enRecorrido = false
-                    transmitiendo = false // El GPS se apaga al terminar
+                    transmitiendo = false
                     ultimaUbicacion = "Viaje finalizado."
-                    // Etapa 6: Aquí cerraremos el registro en Firebase
+                    idRecorridoActual = null // Limpiamos la memoria para el próximo viaje
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
@@ -803,21 +862,19 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         )
     }
 
-    val paraderoCentro = remember {
-        ParaderoOficial(
-            id = "P1",
-            nombre = "Paradero Centro",
-            direccion = "Ruta L1, L2",
-            latitud = 2.4430,
-            longitud = -76.6055
-        )
-    }
 
-    // 1. ESTADO PARA MÚLTIPLES BUSES (Corregido para ser 100% reactivo)
+
+// 1. ESTADO PARA MÚLTIPLES BUSES (Corregido para ser 100% reactivo)
     var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
     val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
 
-    // 2. MOTOR DE RECEPCIÓN ESPACIAL MULTIPLE
+    // --- NUEVO SPRINT 4: ESTADOS DE INFRAESTRUCTURA ---
+    var rutasOficiales by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
+    var paraderosOficiales by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
+
+    // NUEVO ESTADO: Control de capas para la UI
+    var mostrarRutas by remember { mutableStateOf(true) }
+
 // 2. MOTOR DE RECEPCIÓN ESPACIAL (A prueba de balas + Logs)
     DisposableEffect(Unit) {
         val database = FirebaseDatabase.getInstance()
@@ -868,6 +925,88 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         query.addValueEventListener(listener)
         onDispose { query.removeEventListener(listener) }
     }
+    // --- NUEVO SPRINT 4: MOTOR DE INFRAESTRUCTURA (Rutas y Paraderos) ---
+    DisposableEffect(Unit) {
+        val database = FirebaseDatabase.getInstance()
+        val refRutas = database.getReference("rutas")
+        val refParaderos = database.getReference("paraderos")
+
+        // Listener para Paraderos
+        val listenerParaderos = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val listaParaderos = mutableListOf<ParaderoOficial>()
+                for (hijo in snapshot.children) {
+                    val p = hijo.getValue(ParaderoOficial::class.java)
+                    if (p != null) {
+                        listaParaderos.add(p.copy(id = hijo.key ?: ""))
+                    }
+                }
+                paraderosOficiales = listaParaderos
+                Log.d("Infraestructura", "Descargados ${listaParaderos.size} paraderos.")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Infraestructura", "Error leyendo paraderos", error.toException())
+            }
+        }
+
+// Listener para Rutas (A prueba de balas)
+        val listenerRutas = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val listaRutas = mutableListOf<RutaOficial>()
+                for (hijo in snapshot.children) {
+                    val idRuta = hijo.key ?: ""
+                    val nombre = hijo.child("nombre_ruta").getValue(String::class.java) ?: ""
+                    val origen = hijo.child("origen").getValue(String::class.java) ?: ""
+                    val destino = hijo.child("destino").getValue(String::class.java) ?: ""
+
+                    // 1. Inmunidad a errores: forzamos minúsculas y quitamos espacios
+                    val estado = hijo.child("estado").getValue(String::class.java)?.trim()?.lowercase() ?: "activa"
+
+                    val geometriaNode = hijo.child("geometria")
+                    val geometriaList = mutableListOf<CoordenadaRuta>()
+
+                    for (coord in geometriaNode.children) {
+                        // 2. Extracción segura: lee igual si es texto o número en la base de datos
+                        val latObj = coord.child("latitud").value
+                        val lngObj = coord.child("longitud").value
+                        val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull() ?: 0.0
+                        val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull() ?: 0.0
+
+                        // Solo agregamos puntos que no sean cero
+                        if(lat != 0.0 && lng != 0.0){
+                            geometriaList.add(CoordenadaRuta(lat, lng))
+                        }
+                    }
+
+                    // 3. Log espía para ver qué encontró exactamente
+                    Log.d("Infraestructura", "-> Ruta: $nombre | Estado: $estado | Puntos válidos: ${geometriaList.size}")
+
+                    listaRutas.add(RutaOficial(
+                        id = idRuta,
+                        nombre_ruta = nombre,
+                        origen = origen,
+                        destino = destino,
+                        estado = estado,
+                        geometria = geometriaList
+                    ))
+                }
+                rutasOficiales = listaRutas
+                Log.d("Infraestructura", "Descargadas ${listaRutas.size} rutas.")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Infraestructura", "Error leyendo rutas", error.toException())
+            }
+        }
+
+        refParaderos.addValueEventListener(listenerParaderos)
+        refRutas.addValueEventListener(listenerRutas)
+
+        onDispose {
+            refParaderos.removeEventListener(listenerParaderos)
+            refRutas.removeEventListener(listenerRutas)
+        }
+    }
+
 
 // 3. EL MAPA Y EL RADAR VISUAL
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
@@ -880,11 +1019,34 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
             cameraPositionState = cameraPositionState,
             properties = mapProperties
         ) {
-            Marker(
-                state = MarkerState(position = LatLng(paraderoCentro.latitud, paraderoCentro.longitud)),
-                title = paraderoCentro.nombre,
-                snippet = paraderoCentro.direccion
-            )
+            // --- NUEVO SPRINT 4: RENDERIZADO DE RUTAS OFICIALES (Polylines) ---
+            if (mostrarRutas) {
+                rutasOficiales.forEach { ruta ->
+                    if (ruta.estado == "activa" && ruta.geometria.isNotEmpty()) {
+                        val puntosLinea = ruta.geometria.map { LatLng(it.latitud, it.longitud) }
+                        com.google.maps.android.compose.Polyline(
+                            points = puntosLinea,
+                            color = Color.Red,
+                            width = 25f
+                        )
+                    }
+                }
+            }
+
+
+// --- NUEVO SPRINT 4: RENDERIZADO DE PARADEROS OFICIALES ---
+            paraderosOficiales.forEach { paradero ->
+                // El diccionario de datos exige que el estado sea "activo"
+                if (paradero.estado == "activo") {
+                    Marker(
+                        state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
+                        title = paradero.nombre,
+                        snippet = paradero.direccion,
+                        // Pintamos el paradero de color verde para distinguirlo en la interfaz
+                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                    )
+                }
+            }
 
             busesEnZona.forEach { (idBus, destino) ->
                 key(idBus) {
@@ -906,6 +1068,22 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
             style = MaterialTheme.typography.headlineSmall,
             color = Color.Red
         )
+        // --- NUEVO SPRINT 4: INTERRUPTOR FLOTANTE PARA OCULTAR RUTAS ---
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Ver Rutas", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = mostrarRutas,
+                onCheckedChange = { mostrarRutas = it }
+            )
+        }
 
         // 3. El Botón de Cerrar Sesión va en la parte inferior (BottomCenter)
         Button(
@@ -919,3 +1097,398 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     } // Fin del Box
 } // Fin de la función MapaPopabus
+
+
+@Composable
+fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
+    // Memoria interna para navegar dentro del panel de admin sin tocar el MainActivity
+    var subPantalla by remember { mutableStateOf("MENU") }
+
+    when (subPantalla) {
+        "MENU" -> {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Panel de Administración", style = MaterialTheme.typography.headlineMedium)
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Al hacer clic, cambiamos a la pantalla de paraderos
+                Button(onClick = { subPantalla = "PARADEROS" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("🚌 Gestionar Paraderos")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 1. ACTUALIZA ESTE BOTÓN:
+                Button(onClick = { subPantalla = "RUTAS" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("🗺️ Gestionar Rutas")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 1. ACTUALIZA ESTE BOTÓN:
+                Button(onClick = { subPantalla = "BUSES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("🚐 Gestionar Buses")
+                }
+                Spacer(modifier = Modifier.height(48.dp))
+
+                Button(
+                    onClick = onCerrarSesion,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Cerrar Sesión")
+                }
+            }
+        }
+        "PARADEROS" -> PantallaGestionParaderos(onVolver = { subPantalla = "MENU" })
+        // 2. AÑADE ESTA LÍNEA:
+        "RUTAS" -> PantallaGestionRutas(onVolver = { subPantalla = "MENU" })
+        // 2. AÑADE ESTA LÍNEA:
+        "BUSES" -> PantallaGestionBuses(onVolver = { subPantalla = "MENU" })
+    }
+}
+
+@Composable
+fun PantallaGestionParaderos(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val database = remember { FirebaseDatabase.getInstance() }
+    val refParaderos = database.getReference("paraderos")
+
+    // Estados para el formulario
+    var nombre by remember { mutableStateOf("") }
+    var direccion by remember { mutableStateOf("") }
+    var latitud by remember { mutableStateOf("") }
+    var longitud by remember { mutableStateOf("") }
+
+    // Estado para la lista en tiempo real
+    var listaParaderos by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
+
+    // Descargamos los paraderos de Firebase en tiempo real
+    DisposableEffect(Unit) {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val paraderos = mutableListOf<ParaderoOficial>()
+                for (hijo in snapshot.children) {
+                    val p = hijo.getValue(ParaderoOficial::class.java)
+                    if (p != null) {
+                        paraderos.add(p.copy(id = hijo.key ?: ""))
+                    }
+                }
+                listaParaderos = paraderos
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refParaderos.addValueEventListener(listener)
+        onDispose { refParaderos.removeEventListener(listener) }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Gestión de Paraderos", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Formulario alineado a tu diccionario de datos
+        OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre (Ej: Parque Caldas)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = direccion, onValueChange = { direccion = it }, label = { Text("Dirección") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = latitud, onValueChange = { latitud = it }, label = { Text("Latitud (Ej: 2.4419)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = longitud, onValueChange = { longitud = it }, label = { Text("Longitud (Ej: -76.6063)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                val lat = latitud.toDoubleOrNull()
+                val lng = longitud.toDoubleOrNull()
+
+                if (nombre.isNotEmpty() && lat != null && lng != null) {
+                    val nuevoParaderoRef = refParaderos.push() // Firebase genera el _id
+                    val geohash = calcularGeohash(lat, lng) // Reutilizamos tu algoritmo nativo
+
+                    val nuevoParadero = ParaderoOficial(
+                        nombre = nombre,
+                        direccion = direccion,
+                        latitud = lat,
+                        longitud = lng,
+                        geohash = geohash,
+                        estado = "activo"
+                    )
+
+                    nuevoParaderoRef.setValue(nuevoParadero).addOnSuccessListener {
+                        Toast.makeText(context, "Paradero Guardado", Toast.LENGTH_SHORT).show()
+                        nombre = ""
+                        direccion = ""
+                        latitud = ""
+                        longitud = ""
+                    }.addOnFailureListener {
+                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Llene nombre y coordenadas numéricas válidas", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("➕ Crear Paradero")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Paraderos Registrados: ${listaParaderos.size}", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Lista visual para ver lo que hay en Firebase
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(listaParaderos) { paradero ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("📍 ${paradero.nombre}", style = MaterialTheme.typography.titleMedium)
+                        Text("Dir: ${paradero.direccion}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Geo: ${paradero.latitud}, ${paradero.longitud}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
+
+@Composable
+fun PantallaGestionRutas(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val database = remember { FirebaseDatabase.getInstance() }
+    val refRutas = database.getReference("rutas")
+
+    // Estados para el formulario
+    var nombreRuta by remember { mutableStateOf("") }
+    var origen by remember { mutableStateOf("") }
+    var destino by remember { mutableStateOf("") }
+
+    // Estado para la lista en tiempo real
+    var listaRutas by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
+
+    // Descargamos las rutas de Firebase en tiempo real
+    DisposableEffect(Unit) {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val rutas = mutableListOf<RutaOficial>()
+                for (hijo in snapshot.children) {
+                    val r = hijo.getValue(RutaOficial::class.java)
+                    if (r != null) {
+                        rutas.add(r.copy(id = hijo.key ?: ""))
+                    }
+                }
+                listaRutas = rutas
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refRutas.addValueEventListener(listener)
+        onDispose { refRutas.removeEventListener(listener) }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Gestión de Rutas", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Formulario alineado a tu diccionario de datos
+        OutlinedTextField(value = nombreRuta, onValueChange = { nombreRuta = it }, label = { Text("Nombre (Ej: Línea 1)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = origen, onValueChange = { origen = it }, label = { Text("Origen (Ej: Norte)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = destino, onValueChange = { destino = it }, label = { Text("Destino (Ej: Centro)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                if (nombreRuta.isNotEmpty() && origen.isNotEmpty() && destino.isNotEmpty()) {
+                    val nuevaRutaRef = refRutas.push() // Firebase genera el _id
+
+                    val nuevaRuta = RutaOficial(
+                        nombre_ruta = nombreRuta,
+                        origen = origen,
+                        destino = destino,
+                        estado = "activa"
+                        // paraderos y geometria inician vacíos, listos para ser llenados luego
+                    )
+
+                    nuevaRutaRef.setValue(nuevaRuta).addOnSuccessListener {
+                        Toast.makeText(context, "Ruta Creada", Toast.LENGTH_SHORT).show()
+                        nombreRuta = ""
+                        origen = ""
+                        destino = ""
+                    }.addOnFailureListener {
+                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Por favor llene todos los campos", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("➕ Crear Ruta Base")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Rutas Registradas: ${listaRutas.size}", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Lista visual para ver lo que hay en Firebase
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(listaRutas) { ruta ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("🗺️ ${ruta.nombre_ruta}", style = MaterialTheme.typography.titleMedium)
+                        Text("De: ${ruta.origen} ➔ A: ${ruta.destino}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Estado: ${ruta.estado}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
+
+
+@Composable
+fun PantallaGestionBuses(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val database = remember { FirebaseDatabase.getInstance() }
+    val refBuses = database.getReference("buses")
+
+    // Estados para el formulario alineados a tu diccionario de datos
+    var placa by remember { mutableStateOf("") }
+    var modelo by remember { mutableStateOf("") }
+    var idRuta by remember { mutableStateOf("") }
+    var idConductor by remember { mutableStateOf("") }
+
+    // Estado para la lista en tiempo real
+    var listaBuses by remember { mutableStateOf<List<BusOficial>>(emptyList()) }
+
+    // Descargamos los buses de Firebase en tiempo real
+    DisposableEffect(Unit) {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val buses = mutableListOf<BusOficial>()
+                for (hijo in snapshot.children) {
+                    val b = hijo.getValue(BusOficial::class.java)
+                    if (b != null) {
+                        buses.add(b.copy(id = hijo.key ?: ""))
+                    }
+                }
+                listaBuses = buses
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refBuses.addValueEventListener(listener)
+        onDispose { refBuses.removeEventListener(listener) }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Gestión de Vehículos", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Formulario alineado a tu diccionario de datos
+        OutlinedTextField(value = placa, onValueChange = { placa = it }, label = { Text("Placa (Ej: TJU-123)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = modelo, onValueChange = { modelo = it }, label = { Text("Modelo/Año") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = idRuta, onValueChange = { idRuta = it }, label = { Text("ID de la Ruta (Opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(value = idConductor, onValueChange = { idConductor = it }, label = { Text("UID del Conductor (Opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                if (placa.isNotEmpty()) {
+                    val nuevoBusRef = refBuses.push() // Firebase genera el _id
+
+                    val nuevoBus = BusOficial(
+                        placa = placa,
+                        modelo = modelo,
+                        id_ruta = idRuta,
+                        id_conductor_actual = idConductor,
+                        estado = "activo"
+                    )
+
+                    nuevoBusRef.setValue(nuevoBus).addOnSuccessListener {
+                        Toast.makeText(context, "Bus Registrado", Toast.LENGTH_SHORT).show()
+                        placa = ""
+                        modelo = ""
+                        idRuta = ""
+                        idConductor = ""
+                    }.addOnFailureListener {
+                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "La placa es obligatoria", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("➕ Registrar Bus")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Vehículos Registrados: ${listaBuses.size}", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Lista visual para ver lo que hay en Firebase
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(listaBuses) { bus ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("🚐 Placa: ${bus.placa}", style = MaterialTheme.typography.titleMedium)
+                        Text("Modelo: ${bus.modelo} | Estado: ${bus.estado}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Ruta Asignada: ${bus.id_ruta.ifEmpty { "Ninguna" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Conductor UID: ${bus.id_conductor_actual.ifEmpty { "Ninguno" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
