@@ -22,6 +22,7 @@ class ServicioGpsConductor : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private var idRecorrido: String? = null
+    private var idBusReal: String = "BUS_DESCONOCIDO"
 
     // Mantenemos tus superpoderes de ADB para las pruebas
     private var mockReceiver: BroadcastReceiver? = null
@@ -36,22 +37,19 @@ class ServicioGpsConductor : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 1. Recibimos el ID del viaje desde la interfaz gráfica
         idRecorrido = intent?.getStringExtra("ID_RECORRIDO")
 
-        // 2. Arrancamos el escudo de invulnerabilidad (Foreground Service)
+        // Atrapamos el ID del bus (Si por algún motivo llega vacío, previene colapsos)
+        idBusReal = intent?.getStringExtra("ID_BUS") ?: "BUS_DESCONOCIDO"
+
         startForeground(1, crearNotificacion())
-
-        // 3. Encendemos los motores GPS
         iniciarRastreoGps()
-
-        // START_STICKY le dice a Android: "Si te quedas sin RAM y me matas, reiníciame apenas puedas"
         return START_STICKY
     }
-
     private fun iniciarRastreoGps() {
         val database = FirebaseDatabase.getInstance()
-        val busRef = database.getReference("BusesActivos/Bus_01")
+        // Usamos el ID dinámico que pertenece a este conductor específico
+        val busRef = database.getReference("BusesActivos/$idBusReal")
 
         // --- 1. RECEPTOR ADB MOCK ---
         mockReceiver = object : BroadcastReceiver() {

@@ -839,33 +839,58 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 
                 // LÓGICA VISUAL DEL RECORRIDO (Tus botones originales)
                 if (!enRecorrido) {
+// Botón para INICIAR
                     Button(
                         onClick = {
                             val uid = auth.currentUser?.uid ?: "CONDUCTOR_DESCONOCIDO"
-                            val refRecorridos = database.getReference("recorridos")
-                            val nuevoRecorridoRef = refRecorridos.push()
-                            val idGenerado = nuevoRecorridoRef.key
+                            val refBuses = database.getReference("buses")
 
-                            val nuevoRecorrido = RecorridoOficial(
-                                id_usuario = uid, id_bus = "BUS_1", id_ruta = "RUTA_1",
-                                hora_inicio = System.currentTimeMillis(), hora_fin = null, estado = "en_curso"
-                            )
+                            // --- LA MAGIA: Buscamos qué bus tiene asignado este conductor ---
+                            refBuses.orderByChild("id_conductor_actual").equalTo(uid).get().addOnSuccessListener { snapshot ->
+                                if (snapshot.exists()) {
+                                    // Encontramos el bus asignado al conductor
+                                    val busSnapshot = snapshot.children.first()
+                                    val busIdReal = busSnapshot.key ?: "BUS_DESCONOCIDO"
+                                    val rutaIdReal = busSnapshot.child("id_ruta").getValue(String::class.java) ?: "RUTA_DESCONOCIDA"
 
-                            nuevoRecorridoRef.setValue(nuevoRecorrido).addOnSuccessListener {
-                                idRecorridoActual = idGenerado
-                                enRecorrido = true
-                                transmitiendo = true
+                                    val refRecorridos = database.getReference("recorridos")
+                                    val nuevoRecorridoRef = refRecorridos.push()
+                                    val idGenerado = nuevoRecorridoRef.key
 
-                                // Arrancar servicio invulnerable
-                                val intent = Intent(context, ServicioGpsConductor::class.java)
-                                intent.putExtra("ID_RECORRIDO", idGenerado)
-                                ContextCompat.startForegroundService(context, intent)
+                                    // Armamos el viaje con los IDs VERDADEROS de la base de datos
+                                    val nuevoRecorrido = RecorridoOficial(
+                                        id_usuario = uid,
+                                        id_bus = busIdReal, // <-- ¡DATO REAL!
+                                        id_ruta = rutaIdReal, // <-- ¡DATO REAL!
+                                        hora_inicio = System.currentTimeMillis(),
+                                        hora_fin = null,
+                                        estado = "en_curso"
+                                    )
 
-                                Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                                    nuevoRecorridoRef.setValue(nuevoRecorrido).addOnSuccessListener {
+                                        idRecorridoActual = idGenerado
+                                        enRecorrido = true
+                                        transmitiendo = true
+                                        ultimaUbicacion = "Transmitiendo en 2do plano... 🛡️"
+
+                                        // Arrancamos el servicio pasándole el ID REAL del bus
+                                        val intent = Intent(context, ServicioGpsConductor::class.java)
+                                        intent.putExtra("ID_RECORRIDO", idGenerado)
+                                        intent.putExtra("ID_BUS", busIdReal) // <-- LE ENVIAMOS EL ID AL SERVICIO
+                                        ContextCompat.startForegroundService(context, intent)
+
+                                        Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    // Si el conductor no tiene bus asignado, no lo dejamos transmitir a la deriva
+                                    Toast.makeText(context, "No tienes ningún bus asignado en el sistema", Toast.LENGTH_LONG).show()
+                                }
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error buscando bus asignado", Toast.LENGTH_SHORT).show()
                             }
                         },
                         enabled = permisoConcedido,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
                     ) {
                         Text("▶️ Iniciar Recorrido Oficial")
                     }
@@ -1857,16 +1882,18 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                             // 2. Botón para Cambiar Rol
                             OutlinedButton(
                                 onClick = {
-                                    // Ciclo de ascensos: pasajero -> conductor -> administrador -> pasajero
-                                    val nuevoRol = when (usuario.rol.lowercase()) {
-                                        "pasajero" -> "conductor"
-                                        "conductor" -> "administrador"
-                                        else -> "pasajero"
+                                    // 🛑 REGLA DE SEGURIDAD CORPORATIVA: No se toca a los administradores
+                                    if (usuario.rol.lowercase() == "administrador") {
+                                        Toast.makeText(context, "SEGURIDAD: Los administradores solo se gestionan desde la consola web", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        // ✅ Ciclo seguro: solo alterna entre pasajero y conductor
+                                        val nuevoRol = if (usuario.rol.lowercase() == "pasajero") "conductor" else "pasajero"
+
+                                        refUsuarios.child(usuario.id).child("rol").setValue(nuevoRol)
+                                            .addOnSuccessListener {
+                                                Toast.makeText(context, "Rol cambiado a $nuevoRol", Toast.LENGTH_SHORT).show()
+                                            }
                                     }
-                                    refUsuarios.child(usuario.id).child("rol").setValue(nuevoRol)
-                                        .addOnSuccessListener {
-                                            Toast.makeText(context, "Rol cambiado a $nuevoRol", Toast.LENGTH_SHORT).show()
-                                        }
                                 }
                             ) {
                                 Text("🔄 Rol")
