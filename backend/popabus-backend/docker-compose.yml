@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  popabus-api:
+    build: .
+    container_name: popabus-api
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
