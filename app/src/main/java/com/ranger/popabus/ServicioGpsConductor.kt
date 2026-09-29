@@ -11,11 +11,17 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ServerValue
+import com.ranger.popabus.network.RetrofitClient
+import com.ranger.popabus.network.UbicacionRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class ServicioGpsConductor : Service() {
 
@@ -23,6 +29,9 @@ class ServicioGpsConductor : Service() {
     private lateinit var locationCallback: LocationCallback
     private var idRecorrido: String? = null
     private var idBusReal: String = "BUS_DESCONOCIDO"
+
+    // Scope para las llamadas asíncronas a Retrofit
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Mantenemos tus superpoderes de ADB para las pruebas
     private var mockReceiver: BroadcastReceiver? = null
@@ -38,19 +47,45 @@ class ServicioGpsConductor : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         idRecorrido = intent?.getStringExtra("ID_RECORRIDO")
-
-        // Atrapamos el ID del bus (Si por algún motivo llega vacío, previene colapsos)
         idBusReal = intent?.getStringExtra("ID_BUS") ?: "BUS_DESCONOCIDO"
 
         startForeground(1, crearNotificacion())
         iniciarRastreoGps()
         return START_STICKY
     }
-    private fun iniciarRastreoGps() {
-        val database = FirebaseDatabase.getInstance()
-        // Usamos el ID dinámico que pertenece a este conductor específico
-        val busRef = database.getReference("BusesActivos/$idBusReal")
 
+    /**
+     * Envía una ubicación al backend por HTTP (Retrofit)
+     */
+    private fun enviarUbicacionAlBackend(lat: Double, lng: Double, velocidad: Double) {
+        val hash = calcularGeohash(lat, lng)
+        val recorridoActual = idRecorrido
+
+        serviceScope.launch {
+            try {
+                val respuesta = RetrofitClient.apiService.enviarUbicacion(
+                    UbicacionRequest(
+                        id_bus = idBusReal,
+                        id_recorrido = recorridoActual ?: "",
+                        latitud = lat,
+                        longitud = lng,
+                        geohash = hash,
+                        velocidad = velocidad
+                    )
+                )
+
+                if (respuesta.isSuccessful) {
+                    Log.d("GPS", "✅ Ubicación enviada al backend | Bus: $idBusReal | Lat: $lat, Lng: $lng")
+                } else {
+                    Log.w("GPS", "⚠️ Backend respondió ${respuesta.code()}")
+                }
+            } catch (e: Exception) {
+                Log.e("GPS", "❌ Error enviando ubicación: ${e.message}")
+            }
+        }
+    }
+
+    private fun iniciarRastreoGps() {
         // --- 1. RECEPTOR ADB MOCK ---
         mockReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -59,24 +94,7 @@ class ServicioGpsConductor : Service() {
                 val lng = intent.getFloatExtra("lng", 0f).toDouble()
 
                 if (lat != 0.0 && lng != 0.0) {
-                    // Nota: calcularGeohash y PosicionGpsOficial ya existen en tu proyecto
-                    val hash = calcularGeohash(lat, lng)
-
-                    val datosBus = mapOf(
-                        "latitud" to lat, "longitud" to lng,
-                        "geohash" to hash, "timestamp" to ServerValue.TIMESTAMP
-                    )
-                    busRef.setValue(datosBus)
-
-                    if (idRecorrido != null) {
-                        val refPosiciones = database.getReference("posiciones_gps").child(idRecorrido!!)
-                        refPosiciones.push().setValue(
-                            PosicionGpsOficial(
-                                id_recorrido = idRecorrido!!, latitud = lat, longitud = lng,
-                                geohash = hash, velocidad = 0.0, hora_lectura = System.currentTimeMillis()
-                            )
-                        )
-                    }
+                    enviarUbicacionAlBackend(lat, lng, velocidad = 0.0)
                 }
             }
         }
@@ -91,24 +109,11 @@ class ServicioGpsConductor : Service() {
             override fun onLocationResult(locationResult: LocationResult) {
                 if (usandoMock) return
                 for (location in locationResult.locations) {
-                    val hash = calcularGeohash(location.latitude, location.longitude)
-
-                    val datosBus = mapOf(
-                        "latitud" to location.latitude, "longitud" to location.longitude,
-                        "geohash" to hash, "timestamp" to ServerValue.TIMESTAMP
+                    enviarUbicacionAlBackend(
+                        lat = location.latitude,
+                        lng = location.longitude,
+                        velocidad = location.speed.toDouble()
                     )
-                    busRef.setValue(datosBus)
-
-                    if (idRecorrido != null) {
-                        val refPosiciones = database.getReference("posiciones_gps").child(idRecorrido!!)
-                        refPosiciones.push().setValue(
-                            PosicionGpsOficial(
-                                id_recorrido = idRecorrido!!, latitud = location.latitude,
-                                longitud = location.longitude, geohash = hash,
-                                velocidad = location.speed.toDouble(), hora_lectura = System.currentTimeMillis()
-                            )
-                        )
-                    }
                 }
             }
         }
@@ -116,7 +121,7 @@ class ServicioGpsConductor : Service() {
         try {
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
         } catch (e: SecurityException) {
-            // Se maneja de forma silenciosa. Si llegamos aquí, la Activity ya garantizó los permisos.
+            // La Activity ya garantizó los permisos
         }
     }
 
@@ -134,18 +139,18 @@ class ServicioGpsConductor : Service() {
         return NotificationCompat.Builder(this, "CANAL_GPS_POPABUS")
             .setContentTitle("POPABUS: Viaje en curso")
             .setContentText("Transmitiendo ubicación a los pasajeros...")
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation) // Ícono nativo de Android
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true) // No se puede deslizar para borrar
+            .setOngoing(true)
             .build()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Limpiamos los motores si se detiene el servicio
         if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized) {
             fusedLocationClient.removeLocationUpdates(locationCallback)
         }
         mockReceiver?.let { unregisterReceiver(it) }
+        serviceScope.cancel()
     }
 }

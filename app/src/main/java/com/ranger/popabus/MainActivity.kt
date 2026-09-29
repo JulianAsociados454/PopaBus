@@ -191,6 +191,7 @@ data class HistorialBusquedaOficial(
 
 
 
+
 fun obtenerIconoBus(context: Context, vectorResId: Int): BitmapDescriptor? {
     MapsInitializer.initialize(context)
     val vectorDrawable = ContextCompat.getDrawable(context, vectorResId) ?: return null
@@ -712,6 +713,7 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
 @Composable
 fun PantallaConductor(onCerrarSesion: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     // Estados de la interfaz
@@ -886,51 +888,50 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 // Botón para INICIAR
                     Button(
                         onClick = {
-                            val uid = auth.currentUser?.uid ?: "CONDUCTOR_DESCONOCIDO"
-                            val refBuses = database.getReference("buses")
+                            // ⚠️ UID hardcodeado para la prueba con el usuario conductor@popabus.com
+                            // (en el futuro lo obtendremos del login)
+                            val uidConductor = "uid_conductor_001"
 
-                            // --- LA MAGIA: Buscamos qué bus tiene asignado este conductor ---
-                            refBuses.orderByChild("id_conductor_actual").equalTo(uid).get().addOnSuccessListener { snapshot ->
-                                if (snapshot.exists()) {
-                                    // Encontramos el bus asignado al conductor
-                                    val busSnapshot = snapshot.children.first()
-                                    val busIdReal = busSnapshot.key ?: "BUS_DESCONOCIDO"
-                                    val rutaIdReal = busSnapshot.child("id_ruta").getValue(String::class.java) ?: "RUTA_DESCONOCIDA"
+                            scope.launch {
+                                try {
+                                    val respuesta = com.ranger.popabus.network.RetrofitClient.apiService
+                                        .obtenerBusConductor(uidConductor)
 
-                                    val refRecorridos = database.getReference("recorridos")
-                                    val nuevoRecorridoRef = refRecorridos.push()
-                                    val idGenerado = nuevoRecorridoRef.key
+                                    if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                                        val bus = respuesta.body()!!.bus!!
+                                        val busIdReal = bus.id
+                                        val rutaIdReal = bus.id_ruta
 
-                                    // Armamos el viaje con los IDs VERDADEROS de la base de datos
-                                    val nuevoRecorrido = RecorridoOficial(
-                                        id_usuario = uid,
-                                        id_bus = busIdReal, // <-- ¡DATO REAL!
-                                        id_ruta = rutaIdReal, // <-- ¡DATO REAL!
-                                        hora_inicio = System.currentTimeMillis(),
-                                        hora_fin = null,
-                                        estado = "en_curso"
-                                    )
+                                        // Generamos un ID de recorrido local (no usamos Firebase)
+                                        val idGenerado = "rec_${System.currentTimeMillis()}"
 
-                                    nuevoRecorridoRef.setValue(nuevoRecorrido).addOnSuccessListener {
                                         idRecorridoActual = idGenerado
                                         enRecorrido = true
                                         transmitiendo = true
                                         ultimaUbicacion = "Transmitiendo en 2do plano... 🛡️"
 
-                                        // Arrancamos el servicio pasándole el ID REAL del bus
+                                        // Arrancamos el servicio GPS
                                         val intent = Intent(context, ServicioGpsConductor::class.java)
                                         intent.putExtra("ID_RECORRIDO", idGenerado)
-                                        intent.putExtra("ID_BUS", busIdReal) // <-- LE ENVIAMOS EL ID AL SERVICIO
+                                        intent.putExtra("ID_BUS", busIdReal)
                                         ContextCompat.startForegroundService(context, intent)
 
                                         Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "No tienes ningún bus asignado en el sistema",
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                     }
-                                } else {
-                                    // Si el conductor no tiene bus asignado, no lo dejamos transmitir a la deriva
-                                    Toast.makeText(context, "No tienes ningún bus asignado en el sistema", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        "❌ Error buscando bus: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    Log.e("Conductor", "Error en obtenerBusConductor", e)
                                 }
-                            }.addOnFailureListener {
-                                Toast.makeText(context, "Error buscando bus asignado", Toast.LENGTH_SHORT).show()
                             }
                         },
                         enabled = permisoConcedido,

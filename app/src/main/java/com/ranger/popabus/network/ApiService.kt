@@ -4,6 +4,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 data class MensajeRespuesta(
     val status: String,
@@ -37,6 +38,34 @@ data class RegisterResponse(
     val rol: String = "",
     val nombre_completo: String = ""
 )
+data class UbicacionRequest(
+    val id_bus: String,
+    val id_recorrido: String,
+    val latitud: Double,
+    val longitud: Double,
+    val geohash: String,
+    val velocidad: Double = 0.0,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+data class UbicacionResponse(
+    val status: String,
+    val mensaje: String
+)
+data class BusRespuesta(
+    val id: String,
+    val placa: String,
+    val modelo: String,
+    val id_ruta: String,
+    val id_conductor_actual: String,
+    val estado: String = "activo"
+)
+
+data class BusConductorResponse(
+    val status: String,
+    val mensaje: String,
+    val bus: BusRespuesta? = null
+)
 
 interface ApiService {
     @GET("/")
@@ -47,4 +76,9 @@ interface ApiService {
 
     @POST("/api/auth/register")
     suspend fun registrar(@Body request: RegisterRequest): Response<RegisterResponse>
+    @POST("/api/ubicacion")
+    suspend fun enviarUbicacion(@Body request: UbicacionRequest): Response<UbicacionResponse>
+    @GET("/api/buses/conductor/{uid}")
+    suspend fun obtenerBusConductor(@Path("uid") uid: String): Response<BusConductorResponse>
+
 }

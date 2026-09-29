@@ -47,7 +47,38 @@ data class LoginResponse(
     val uid: String = "",
     val nombre_completo: String = ""
 )
+@Serializable
+data class UbicacionRequest(
+    val id_bus: String,
+    val id_recorrido: String,
+    val latitud: Double,
+    val longitud: Double,
+    val geohash: String,
+    val velocidad: Double = 0.0,
+    val timestamp: Long = System.currentTimeMillis()
+)
 
+@Serializable
+data class UbicacionResponse(
+    val status: String,
+    val mensaje: String
+)
+@Serializable
+data class BusRespuesta(
+    val id: String,
+    val placa: String,
+    val modelo: String,
+    val id_ruta: String,
+    val id_conductor_actual: String,
+    val estado: String = "activo"
+)
+
+@Serializable
+data class BusConductorResponse(
+    val status: String,
+    val mensaje: String,
+    val bus: BusRespuesta? = null
+)
 // Usuarios de prueba (mientras conectamos Firebase Admin)
 data class UsuarioEnMemoria(
     val correo: String,
@@ -57,10 +88,21 @@ data class UsuarioEnMemoria(
     val uid: String
 )
 
+
 val usuariosDePrueba = listOf(
     UsuarioEnMemoria("admin@popabus.com",      "admin123",     "administrador", "Administrador Principal", "uid_admin_001"),
     UsuarioEnMemoria("conductor@popabus.com",  "conductor123", "conductor",     "Juan Conductor",          "uid_conductor_001"),
     UsuarioEnMemoria("pasajero@popabus.com",   "pasajero123",  "pasajero",      "Pedro Pasajero",          "uid_pasajero_001")
+)
+val busesDePrueba = listOf(
+    BusRespuesta(
+        id = "bus_test_001",
+        placa = "ABC-123",
+        modelo = "2024",
+        id_ruta = "ruta_test_001",
+        id_conductor_actual = "uid_conductor_001",
+        estado = "activo"
+    )
 )
 
 fun Application.configureRouting() {
@@ -147,6 +189,50 @@ fun Application.configureRouting() {
                     nombre_completo = nuevoUsuario.nombre
                 )
             )
+        }
+
+        post("/api/ubicacion") {
+            val request = call.receive<UbicacionRequest>()
+
+            println("📍 Ubicación recibida:")
+            println("   Bus: ${request.id_bus}")
+            println("   Recorrido: ${request.id_recorrido}")
+            println("   Lat: ${request.latitud}, Lng: ${request.longitud}")
+            println("   Geohash: ${request.geohash}")
+            println("   Velocidad: ${request.velocidad} m/s")
+
+            // ⚠️ Por ahora solo lo imprimimos en consola.
+            // Después lo guardaremos en PostgreSQL.
+
+            call.respond(
+                UbicacionResponse(
+                    status = "ok",
+                    mensaje = "Ubicación registrada"
+                )
+            )
+        }
+        get("/api/buses/conductor/{uid}") {
+            val uid = call.parameters["uid"] ?: ""
+
+            val busEncontrado = busesDePrueba.find { it.id_conductor_actual == uid }
+
+            if (busEncontrado != null) {
+                call.respond(
+                    BusConductorResponse(
+                        status = "ok",
+                        mensaje = "Bus encontrado",
+                        bus = busEncontrado
+                    )
+                )
+            } else {
+                call.respond(
+                    HttpStatusCode.NotFound,
+                    BusConductorResponse(
+                        status = "error",
+                        mensaje = "No tienes ningún bus asignado"
+                    )
+                )
+            }
         }
     }
 }
