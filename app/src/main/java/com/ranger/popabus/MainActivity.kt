@@ -81,6 +81,8 @@ import androidx.compose.material3.AlertDialog
 
 import androidx.compose.material3.OutlinedButton
 import android.location.Location
+import kotlinx.coroutines.launch
+import androidx.compose.material3.OutlinedButton
 
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
@@ -551,6 +553,37 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
         ) {
             Text("Continuar sin registrarse")
         }
+        // ---- INICIO BOTÓN DE PRUEBA ----
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedButton(
+            onClick = {
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                    try {
+                        val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.probarConexion()
+                        if (respuesta.isSuccessful) {
+                            val datos = respuesta.body()
+                            Toast.makeText(
+                                context,
+                                "✅ Backend dice: ${datos?.mensaje} (${datos?.autor})",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            Toast.makeText(context, " Error HTTP: ${respuesta.code()}", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, " Fallo: ${e.message}", Toast.LENGTH_LONG).show()
+                        Log.e("RetrofitTest", "Error al conectar con backend", e)
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("🧪 Probar conexión con Backend")
+        }
+
+        // ---- FIN BOTÓN DE PRUEBA ----
 
 
 
