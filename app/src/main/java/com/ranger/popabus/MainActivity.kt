@@ -444,6 +444,7 @@ fun PantallaSeleccionRol(onConductorSeleccionado: () -> Unit, onPasajeroSeleccio
 @Composable
 fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val auth = remember { FirebaseAuth.getInstance() }
     val database = remember { FirebaseDatabase.getInstance() }
 
@@ -484,48 +485,40 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
             onClick = {
                 if (correo.isNotEmpty() && contrasena.isNotEmpty()) {
                     cargando = true
-                    // 1. Firebase Auth valida las credenciales
-                    auth.signInWithEmailAndPassword(correo, contrasena)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val uid = auth.currentUser?.uid
-                                if (uid != null) {
-                                    // 2. Si Auth es exitoso, buscamos el PERFIL COMPLETO para evitar el caché
-                                    database.getReference("usuarios").child(uid).get()
-                                        .addOnSuccessListener { snapshot ->
-                                            cargando = false
+                    scope.launch {
+                        try {
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.login(
+                                com.ranger.popabus.network.LoginRequest(
+                                    correo = correo,
+                                    contrasena = contrasena
+                                )
+                            )
+                            cargando = false
 
-                                            // Extraemos el estado de la cuenta (true por defecto para mayor seguridad)
-                                            val activo = snapshot.child("activo").getValue(Boolean::class.java) ?: true
-
-                                            if (!activo) {
-                                                // 🛑 BLOQUEO DE SEGURIDAD: Expulsión inmediata
-                                                auth.signOut()
-                                                Toast.makeText(context, "ACCESO DENEGADO: Cuenta suspendida", Toast.LENGTH_LONG).show()
-                                            } else {
-                                                // ✅ ACCESO PERMITIDO: Extraemos el rol fresco de la nube
-                                                val rol = snapshot.child("rol").getValue(String::class.java) ?: "pasajero"
-                                                Toast.makeText(context, "Bienvenido", Toast.LENGTH_SHORT).show()
-                                                // 3. Enviamos el rol al enrutador de MainActivity
-                                                onLoginExitoso(rol)
-                                            }
-                                        }
-                                        .addOnFailureListener { error ->
-                                            cargando = false
-                                            Toast.makeText(context, "Error al leer perfil: ${error.message}", Toast.LENGTH_LONG).show()
-                                        }
-                                }
+                            if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                                val datos = respuesta.body()!!
+                                Toast.makeText(
+                                    context,
+                                    "Bienvenido ${datos.nombre_completo}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                onLoginExitoso(datos.rol)
                             } else {
-                                cargando = false
-                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                val msj = respuesta.body()?.mensaje ?: "Error ${respuesta.code()}"
+                                Toast.makeText(context, msj, Toast.LENGTH_LONG).show()
                             }
+                        } catch (e: Exception) {
+                            cargando = false
+                            Toast.makeText(context, " Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
+                            Log.e("LoginTest", "Error en login", e)
                         }
+                    }
                 } else {
                     Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !cargando // Deshabilita el botón mientras carga
+            enabled = !cargando
         ) {
             Text(if (cargando) "Validando..." else "Ingresar")
         }
@@ -594,6 +587,7 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
 @Composable
 fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, String, String) -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val auth = remember { FirebaseAuth.getInstance() } // Instancia de Firebase Auth
 
     var nombre by remember { mutableStateOf("") }
@@ -665,19 +659,36 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
 
         Button(
             onClick = {
-                // LÓGICA DE REGISTRO EN FIREBASE
                 if (correo.isNotEmpty() && contrasena.isNotEmpty() && nombre.isNotEmpty()) {
-                    auth.createUserWithEmailAndPassword(correo, contrasena)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val user = auth.currentUser
-                                Toast.makeText(context, "¡Usuario creado exitosamente!", Toast.LENGTH_SHORT).show()
-                                // Enviamos los datos para usarlos en el siguiente paso (Días 8-9)
-                                onRegistroExitoso(user?.uid ?: "", nombre, rolSeleccionado)
+                    scope.launch {
+                        try {
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.registrar(
+                                com.ranger.popabus.network.RegisterRequest(
+                                    correo = correo,
+                                    contrasena = contrasena,
+                                    nombre_completo = nombre,
+                                    rol = rolSeleccionado
+                                )
+                            )
+
+                            if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                                val datos = respuesta.body()!!
+                                Toast.makeText(
+                                    context,
+                                    " Cuenta creada: ${datos.nombre_completo}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                // Notificamos a MainActivity para que navegue
+                                onRegistroExitoso(datos.uid, datos.nombre_completo, datos.rol)
                             } else {
-                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                val msj = respuesta.body()?.mensaje ?: "Error ${respuesta.code()}"
+                                Toast.makeText(context, " $msj", Toast.LENGTH_LONG).show()
                             }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, " Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
+                            Log.e("RegisterTest", "Error en registro", e)
                         }
+                    }
                 } else {
                     Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
                 }
