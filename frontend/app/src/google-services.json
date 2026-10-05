@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "519575230065",
+    "project_id": "popabus-41b42",
+    "storage_bucket": "popabus-41b42.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:519575230065:android:4409eed182950ef4c1add0",
+        "android_client_info": {
+          "package_name": "com.ranger.popabus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxkEmM6QJPsLxVVWrT_UUm1DzG2coxSZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
