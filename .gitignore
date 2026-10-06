@@ -1,0 +1,23 @@
+# ==== IDE / Sistema ====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ==== Android / Gradle (dentro de frontend) ====
+frontend/.gradle/
+frontend/build/
+frontend/app/build/
+frontend/local.properties
+frontend/.idea/
+frontend/captures/
+frontend/*.iml
+frontend/.cxx/
+frontend/.externalNativeBuild/
+frontend/.kotlin/
+
+# ==== Node / backend ====
+backend/node_modules/
+backend/.env
+backend/npm-debug.log*
+backend/coverage/
