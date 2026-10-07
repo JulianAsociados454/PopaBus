@@ -9,12 +9,31 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 
+// --- MODELOS BÁSICOS ---
 @Serializable
 data class MensajeRespuesta(
     val status: String,
     val mensaje: String,
     val autor: String
 )
+
+// --- MODELOS DE LOGIN ---
+@Serializable
+data class LoginRequest(
+    val correo: String,
+    val contrasena: String
+)
+
+@Serializable
+data class LoginResponse(
+    val status: String,
+    val mensaje: String,
+    val rol: String = "",
+    val uid: String = "",
+    val nombre_completo: String = ""
+)
+
+// --- MODELOS DE REGISTRO ---
 @Serializable
 data class RegisterRequest(
     val correo: String,
@@ -32,21 +51,7 @@ data class RegisterResponse(
     val nombre_completo: String = ""
 )
 
-// --- MODELOS PARA LOGIN ---
-@Serializable
-data class LoginRequest(
-    val correo: String,
-    val contrasena: String
-)
-
-@Serializable
-data class LoginResponse(
-    val status: String,
-    val mensaje: String,
-    val rol: String = "",
-    val uid: String = "",
-    val nombre_completo: String = ""
-)
+// --- MODELOS DE UBICACIÓN ---
 @Serializable
 data class UbicacionRequest(
     val id_bus: String,
@@ -63,6 +68,8 @@ data class UbicacionResponse(
     val status: String,
     val mensaje: String
 )
+
+// --- MODELOS DE BUSES ---
 @Serializable
 data class BusRespuesta(
     val id: String,
@@ -79,7 +86,25 @@ data class BusConductorResponse(
     val mensaje: String,
     val bus: BusRespuesta? = null
 )
-// Usuarios de prueba (mientras conectamos Firebase Admin)
+
+@Serializable
+data class BusActivo(
+    val id_bus: String,
+    val latitud: Double,
+    val longitud: Double,
+    val geohash: String,
+    val velocidad: Double = 0.0,
+    val timestamp: Long = 0L
+)
+
+@Serializable
+data class BusesActivosResponse(
+    val status: String,
+    val mensaje: String,
+    val buses: List<BusActivo>
+)
+
+// --- DATOS EN MEMORIA ---
 data class UsuarioEnMemoria(
     val correo: String,
     val contrasena: String,
@@ -88,12 +113,12 @@ data class UsuarioEnMemoria(
     val uid: String
 )
 
-
 val usuariosDePrueba = listOf(
     UsuarioEnMemoria("admin@popabus.com",      "admin123",     "administrador", "Administrador Principal", "uid_admin_001"),
     UsuarioEnMemoria("conductor@popabus.com",  "conductor123", "conductor",     "Juan Conductor",          "uid_conductor_001"),
     UsuarioEnMemoria("pasajero@popabus.com",   "pasajero123",  "pasajero",      "Pedro Pasajero",          "uid_pasajero_001")
 )
+
 val busesDePrueba = listOf(
     BusRespuesta(
         id = "bus_test_001",
@@ -105,13 +130,16 @@ val busesDePrueba = listOf(
     )
 )
 
+// ⚠️ Guarda la última ubicación de cada bus (a nivel global del archivo)
+val ubicacionesActivas = mutableMapOf<String, UbicacionRequest>()
+
 fun Application.configureRouting() {
     install(ContentNegotiation) {
         json()
     }
 
     routing {
-        // Endpoint de prueba original
+        // --- Endpoint de prueba ---
         get("/") {
             call.respond(
                 MensajeRespuesta(
@@ -122,7 +150,7 @@ fun Application.configureRouting() {
             )
         }
 
-        // --- NUEVO: Login ---
+        // --- Login ---
         post("/api/auth/login") {
             val request = call.receive<LoginRequest>()
 
@@ -150,11 +178,11 @@ fun Application.configureRouting() {
                 )
             }
         }
-        // --- NUEVO: Registro ---
+
+        // --- Registro ---
         post("/api/auth/register") {
             val request = call.receive<RegisterRequest>()
 
-            // Verificar si el correo ya existe
             val yaExiste = usuariosDePrueba.any { it.correo == request.correo }
             if (yaExiste) {
                 call.respond(
@@ -167,7 +195,6 @@ fun Application.configureRouting() {
                 return@post
             }
 
-            // Crear el nuevo usuario (en memoria por ahora)
             val nuevoUid = "uid_${System.currentTimeMillis()}"
             val nuevoUsuario = UsuarioEnMemoria(
                 correo = request.correo,
@@ -177,7 +204,6 @@ fun Application.configureRouting() {
                 uid = nuevoUid
             )
 
-            // ⚠️ Esto no persiste entre reinicios, es solo para probar el flujo
             println("✅ Nuevo usuario registrado: ${nuevoUsuario.nombre} (${nuevoUsuario.correo})")
 
             call.respond(
@@ -191,18 +217,20 @@ fun Application.configureRouting() {
             )
         }
 
+        // --- Recibir ubicación (conductor) ---
         post("/api/ubicacion") {
             val request = call.receive<UbicacionRequest>()
 
-            println("📍 Ubicación recibida:")
+            // ⬇️ Guarda en el Map global
+            ubicacionesActivas[request.id_bus] = request
+
+            println(" Ubicación recibida:")
             println("   Bus: ${request.id_bus}")
             println("   Recorrido: ${request.id_recorrido}")
             println("   Lat: ${request.latitud}, Lng: ${request.longitud}")
             println("   Geohash: ${request.geohash}")
             println("   Velocidad: ${request.velocidad} m/s")
-
-            // ⚠️ Por ahora solo lo imprimimos en consola.
-            // Después lo guardaremos en PostgreSQL.
+            println("    Total buses activos: ${ubicacionesActivas.size}")
 
             call.respond(
                 UbicacionResponse(
@@ -211,6 +239,8 @@ fun Application.configureRouting() {
                 )
             )
         }
+
+        // --- Bus asignado a un conductor ---
         get("/api/buses/conductor/{uid}") {
             val uid = call.parameters["uid"] ?: ""
 
@@ -233,6 +263,30 @@ fun Application.configureRouting() {
                     )
                 )
             }
+        }
+
+        // --- NUEVO: Devuelve todos los buses activos (para el pasajero) ---
+        get("/api/buses/activos") {
+            val listaBuses = ubicacionesActivas.values.map { ubicacion ->
+                BusActivo(
+                    id_bus = ubicacion.id_bus,
+                    latitud = ubicacion.latitud,
+                    longitud = ubicacion.longitud,
+                    geohash = ubicacion.geohash,
+                    velocidad = ubicacion.velocidad,
+                    timestamp = ubicacion.timestamp
+                )
+            }
+
+            println(" Pasajero consultó buses activos: ${listaBuses.size} encontrados")
+
+            call.respond(
+                BusesActivosResponse(
+                    status = "ok",
+                    mensaje = "Buses activos",
+                    buses = listaBuses
+                )
+            )
         }
     }
 }

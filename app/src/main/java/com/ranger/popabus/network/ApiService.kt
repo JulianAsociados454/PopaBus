@@ -66,6 +66,20 @@ data class BusConductorResponse(
     val mensaje: String,
     val bus: BusRespuesta? = null
 )
+data class BusActivo(
+    val id_bus: String,
+    val latitud: Double,
+    val longitud: Double,
+    val geohash: String,
+    val velocidad: Double = 0.0,
+    val timestamp: Long = 0L
+)
+
+data class BusesActivosResponse(
+    val status: String,
+    val mensaje: String,
+    val buses: List<BusActivo>
+)
 
 interface ApiService {
     @GET("/")
@@ -80,5 +94,7 @@ interface ApiService {
     suspend fun enviarUbicacion(@Body request: UbicacionRequest): Response<UbicacionResponse>
     @GET("/api/buses/conductor/{uid}")
     suspend fun obtenerBusConductor(@Path("uid") uid: String): Response<BusConductorResponse>
+    @GET("/api/buses/activos")
+    suspend fun obtenerBusesActivos(): Response<BusesActivosResponse>
 
 }

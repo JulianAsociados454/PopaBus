@@ -993,6 +993,7 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
@@ -1058,55 +1059,25 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     // --- ESTADO PARA EL BUSCADOR ---
     var textoBusqueda by remember { mutableStateOf("") }
 
-// 2. MOTOR DE RECEPCIÓN ESPACIAL (A prueba de balas + Logs)
-    DisposableEffect(Unit) {
-        val database = FirebaseDatabase.getInstance()
-        val prefijoPasajero = calcularGeohash(popayan.latitude, popayan.longitude, 4)
-
-        Log.d("FiltroEspacial", "1. Pasajero buscando buses con Geohash que empiece por: $prefijoPasajero")
-
-        val query = database.getReference("BusesActivos")
-            .orderByChild("geohash")
-            .startAt(prefijoPasajero)
-            .endAt(prefijoPasajero + "\uf8ff")
-
-        query.keepSynced(true)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val busesRecibidos = mutableMapOf<String, LatLng>()
-                Log.d("FiltroEspacial", "2. Firebase respondió con ${snapshot.childrenCount} buses")
-
-                for (busSnapshot in snapshot.children) {
-                    val idBus = busSnapshot.key ?: continue
-
-                    // Lectura segura: Extraemos el valor sin importar si es texto o número en Firebase
-                    val latObj = busSnapshot.child("latitud").value
-                    val lngObj = busSnapshot.child("longitud").value
-                    val geohashBus = busSnapshot.child("geohash").value
-
-                    // Lo forzamos a convertirse en Decimal de forma segura
-                    val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull()
-                    val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull()
-
-                    Log.d("FiltroEspacial", "-> Procesando $idBus | Lat: $lat, Lng: $lng, Hash: $geohashBus")
-
-                    if (lat != null && lng != null) {
-                        busesRecibidos[idBus] = LatLng(lat, lng)
-                    } else {
-                        Log.w("FiltroEspacial", "-> IGNORADO $idBus: Coordenadas inválidas")
+    // 2. MOTOR DE RECEPCIÓN DE BUSES (desde el backend con Retrofit)
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusesActivos()
+                if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                    val listaBuses = respuesta.body()!!.buses
+                    val mapa = mutableMapOf<String, LatLng>()
+                    for (bus in listaBuses) {
+                        mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
                     }
+                    busesEnZona = mapa
+                    Log.d("PasajeroBackend", "🚌 ${mapa.size} buses recibidos del backend")
                 }
-
-                busesEnZona = busesRecibidos
+            } catch (e: Exception) {
+                Log.e("PasajeroBackend", "Error consultando buses: ${e.message}")
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("Firebase", "Error en consulta espacial", error.toException())
-            }
+            delay(3000) // Consulta cada 3 segundos
         }
-
-        query.addValueEventListener(listener)
-        onDispose { query.removeEventListener(listener) }
     }
     // --- NUEVO SPRINT 4: MOTOR DE INFRAESTRUCTURA (Rutas y Paraderos) ---
     DisposableEffect(Unit) {
