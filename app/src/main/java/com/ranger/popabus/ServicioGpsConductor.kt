@@ -42,7 +42,11 @@ class ServicioGpsConductor : Service() {
         // Atrapamos el ID del bus (Si por algún motivo llega vacío, previene colapsos)
         idBusReal = intent?.getStringExtra("ID_BUS") ?: "BUS_DESCONOCIDO"
 
-        startForeground(1, crearNotificacion())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(1, crearNotificacion(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } else {
+            startForeground(1, crearNotificacion())
+        }
         iniciarRastreoGps()
         return START_STICKY
     }

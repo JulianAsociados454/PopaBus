@@ -78,10 +78,32 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.clickable
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 import androidx.compose.material3.OutlinedButton
 import android.location.Location
-
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
     val latitud: Double = 0.0,
@@ -179,6 +201,16 @@ data class IncidenciaOficial(
     val latitud: Double = 0.0,
     val longitud: Double = 0.0
 )
+
+data class ActividadUsuario(
+    val id_actividad: String = "",
+    val id_bus: String = "",
+    val id_ruta: String = "",
+    val fecha_abordaje: Long = 0L,
+    val metodo_registro: String = "manual" // Puede ser "manual" o "automatico"
+)
+
+
 // Representa una consulta realizada por un pasajero (Colección 'historial_busquedas')
 data class HistorialBusquedaOficial(
     val id_usuario: String = "",
@@ -186,6 +218,16 @@ data class HistorialBusquedaOficial(
     val rutas_resultado: Map<String, Boolean> = emptyMap(),
     val fecha_busqueda: Long = 0L
 )
+
+data class InformeDiario(
+    val id_recorrido: String = "",
+    val id_conductor: String = "",
+    val tiempo_total_minutos: Long = 0L,
+    val total_alertas_emitidas: Int = 0,
+    val fecha_cierre: Long = 0L
+)
+
+
 
 
 
@@ -196,6 +238,28 @@ fun obtenerIconoBus(context: Context, vectorResId: Int): BitmapDescriptor? {
     val bitmap = Bitmap.createBitmap(vectorDrawable.intrinsicWidth, vectorDrawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     vectorDrawable.draw(canvas)
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
+fun obtenerIconoBusGris(context: Context, vectorResId: Int): BitmapDescriptor? {
+    MapsInitializer.initialize(context)
+    val vectorDrawable = ContextCompat.getDrawable(context, vectorResId) ?: return null
+    vectorDrawable.setBounds(0, 0, vectorDrawable.intrinsicWidth, vectorDrawable.intrinsicHeight)
+    
+    val bitmap = Bitmap.createBitmap(vectorDrawable.intrinsicWidth, vectorDrawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    
+    // Aplicamos la matriz de saturación cero para volver el ícono blanco y negro
+    val paint = android.graphics.Paint()
+    val matrix = android.graphics.ColorMatrix()
+    matrix.setSaturation(0f)
+    paint.colorFilter = android.graphics.ColorMatrixColorFilter(matrix)
+    
+    // Dibujamos el vector usando una capa con el filtro de color aplicado
+    canvas.saveLayer(null, paint)
+    vectorDrawable.draw(canvas)
+    canvas.restore()
+    
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
@@ -330,66 +394,71 @@ fun obtenerTextoETA(distanciaMetros: Float): String {
     }
 }
 
+// Enum centralizado para la gestión robusta de roles
+enum class RolUsuario(val key: String) {
+    PASAJERO("pasajero"),
+    CONDUCTOR("conductor"),
+    ADMINISTRADOR("administrador");
 
+    companion object {
+        fun desdeString(raw: String?): RolUsuario {
+            if (raw.isNullOrBlank()) return PASAJERO
+            val cleaned = raw.trim().lowercase()
+            return when (cleaned) {
+                "conductor", "driver", "chofer" -> CONDUCTOR
+                "administrador", "admin" -> ADMINISTRADOR
+                "pasajero", "passenger", "user" -> PASAJERO
+                else -> PASAJERO
+            }
+        }
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Ya podemos eliminar probarConexionFirebase() de aquí
         try {
             FirebaseDatabase.getInstance().setPersistenceEnabled(true)
         } catch (e: Exception) {
             Log.d("FirebaseOffline", "La memoria local ya estaba encendida")
         }
 
-
-
         setContent {
             PopaBusTheme {
-                // EVOLUCIÓN: Ahora controlamos pantallas completas, no solo roles
                 var pantallaActual by remember { mutableStateOf("LOGIN") }
 
                 when (pantallaActual) {
                     "LOGIN" -> PantallaLogin(
                         onIrARegistro = { pantallaActual = "REGISTRO" },
                         onLoginExitoso = { rolRecibido ->
-                            val rolNormalizado = rolRecibido.trim().lowercase()
-                            when (rolNormalizado) {
-                                "conductor" -> pantallaActual = "CONDUCTOR"
-                                "administrador" -> pantallaActual = "ADMINISTRADOR"
-                                else -> pantallaActual = "PASAJERO"
+                            val rolEnum = RolUsuario.desdeString(rolRecibido)
+                            when (rolEnum) {
+                                RolUsuario.CONDUCTOR -> pantallaActual = "CONDUCTOR"
+                                RolUsuario.ADMINISTRADOR -> pantallaActual = "ADMINISTRADOR"
+                                RolUsuario.PASAJERO -> pantallaActual = "PASAJERO"
                             }
                         }
                     )
                     "REGISTRO" -> PantallaRegistro(
                         onVolverLogin = { pantallaActual = "LOGIN" },
-                        onRegistroExitoso = { uidGenerado, nombreIngresado, rolElegido ->
-                            // 1. Instanciamos la base de datos
+                        onRegistroExitoso = { uidGenerado, nombreIngresado ->
                             val database = FirebaseDatabase.getInstance()
-
-                            // 2. Apuntamos a la colección 'usuarios' y creamos un "hijo" con el UID exacto de Auth
                             val refUsuario = database.getReference("usuarios").child(uidGenerado)
 
-                            // 3. Armamos el paquete de datos según tu diccionario de datos (MER)
                             val datosUsuario = mapOf(
                                 "nombre_completo" to nombreIngresado,
-                                "rol" to rolElegido,
+                                "rol" to RolUsuario.PASAJERO.key,
                                 "activo" to true,
                                 "fecha_registro" to ServerValue.TIMESTAMP
                             )
 
-                            // 4. Guardamos en la base de datos y avanzamos de pantalla
                             refUsuario.setValue(datosUsuario).addOnCompleteListener { tarea ->
                                 if (tarea.isSuccessful) {
-                                    // Cuando se guarde exitosamente, enviamos al usuario al menú
-                                    pantallaActual = "SELECCION_ROL"
+                                    // Pasa directamente al mapa de Pasajero sin preguntar el rol dos veces
+                                    pantallaActual = "PASAJERO"
                                 }
                             }
                         }
-                    )
-                    "SELECCION_ROL" -> PantallaSeleccionRol(
-                        onConductorSeleccionado = { pantallaActual = "CONDUCTOR" },
-                        onPasajeroSeleccionado = { pantallaActual = "PASAJERO" }
                     )
                     "PASAJERO" -> MapaPopabus(
                         onCerrarSesion = {
@@ -403,42 +472,18 @@ class MainActivity : ComponentActivity() {
                             pantallaActual = "LOGIN"
                         }
                     )
-
                     "ADMINISTRADOR" -> PantallaAdministrador(
                         onCerrarSesion = {
                             FirebaseAuth.getInstance().signOut()
                             pantallaActual = "LOGIN"
                         }
                     )
-
-
                 }
             }
         }
     }
 }
 
-@Composable
-fun PantallaSeleccionRol(onConductorSeleccionado: () -> Unit, onPasajeroSeleccionado: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Bienvenido a POPABUS", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(onClick = onConductorSeleccionado) {
-            Text("Entrar como Conductor")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = onPasajeroSeleccionado) {
-            Text("Entrar como Pasajero")
-        }
-    }
-}
 @Composable
 fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
     val context = LocalContext.current
@@ -447,7 +492,7 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
 
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
-    var cargando by remember { mutableStateOf(false) } // Para mostrar retroalimentación visual
+    var cargando by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -482,30 +527,44 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
             onClick = {
                 if (correo.isNotEmpty() && contrasena.isNotEmpty()) {
                     cargando = true
-                    // 1. Firebase Auth valida las credenciales
                     auth.signInWithEmailAndPassword(correo, contrasena)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 val uid = auth.currentUser?.uid
                                 if (uid != null) {
-                                    // 2. Si Auth es exitoso, buscamos el PERFIL COMPLETO para evitar el caché
                                     database.getReference("usuarios").child(uid).get()
                                         .addOnSuccessListener { snapshot ->
                                             cargando = false
-
-                                            // Extraemos el estado de la cuenta (true por defecto para mayor seguridad)
-                                            val activo = snapshot.child("activo").getValue(Boolean::class.java) ?: true
-
-                                            if (!activo) {
-                                                // 🛑 BLOQUEO DE SEGURIDAD: Expulsión inmediata
-                                                auth.signOut()
-                                                Toast.makeText(context, "ACCESO DENEGADO: Cuenta suspendida", Toast.LENGTH_LONG).show()
+                                            if (!snapshot.exists()) {
+                                                // Autorrecuperación si no existe el nodo /usuarios/{uid}
+                                                database.getReference("buses").orderByChild("id_conductor_actual").equalTo(uid).get()
+                                                    .addOnSuccessListener { busSnap ->
+                                                        val esConductor = busSnap.exists()
+                                                        val rolDefinido = if (esConductor) "conductor" else "pasajero"
+                                                        val datosAuto = mapOf(
+                                                            "nombre_completo" to (auth.currentUser?.email?.substringBefore("@") ?: "Usuario"),
+                                                            "rol" to rolDefinido,
+                                                            "activo" to true,
+                                                            "fecha_registro" to ServerValue.TIMESTAMP
+                                                        )
+                                                        database.getReference("usuarios").child(uid).setValue(datosAuto)
+                                                        Toast.makeText(context, "Bienvenido", Toast.LENGTH_SHORT).show()
+                                                        onLoginExitoso(rolDefinido)
+                                                    }
+                                                    .addOnFailureListener {
+                                                        onLoginExitoso("pasajero")
+                                                    }
                                             } else {
-                                                // ✅ ACCESO PERMITIDO: Extraemos el rol fresco de la nube
-                                                val rol = snapshot.child("rol").getValue(String::class.java) ?: "pasajero"
-                                                Toast.makeText(context, "Bienvenido", Toast.LENGTH_SHORT).show()
-                                                // 3. Enviamos el rol al enrutador de MainActivity
-                                                onLoginExitoso(rol)
+                                                val activo = snapshot.child("activo").getValue(Boolean::class.java) ?: true
+                                                if (!activo) {
+                                                    auth.signOut()
+                                                    Toast.makeText(context, "ACCESO DENEGADO: Cuenta suspendida", Toast.LENGTH_LONG).show()
+                                                } else {
+                                                    val rolRaw = snapshot.child("rol").getValue(String::class.java)
+                                                    val rolEnum = RolUsuario.desdeString(rolRaw)
+                                                    Toast.makeText(context, "Bienvenido", Toast.LENGTH_SHORT).show()
+                                                    onLoginExitoso(rolEnum.key)
+                                                }
                                             }
                                         }
                                         .addOnFailureListener { error ->
@@ -523,7 +582,7 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !cargando // Deshabilita el botón mientras carga
+            enabled = !cargando
         ) {
             Text(if (cargando) "Validando..." else "Ingresar")
         }
@@ -533,9 +592,6 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
             Text("¿No tienes cuenta? Regístrate aquí")
         }
 
-
-
-        // --- NUEVO SPRINT 8: MODO INVITADO ---
         Spacer(modifier = Modifier.height(16.dp))
 
         Text("o", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
@@ -544,36 +600,32 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
 
         OutlinedButton(
             onClick = {
-                // Saltamos la autenticación de Firebase y pasamos "invitado"
-                onLoginExitoso("invitado")
+                onLoginExitoso("pasajero")
             },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Continuar sin registrarse")
         }
-
-
-
     }
 }
 
 
 @Composable
-fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, String, String) -> Unit) {
+fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, String) -> Unit) {
     val context = LocalContext.current
-    val auth = remember { FirebaseAuth.getInstance() } // Instancia de Firebase Auth
+    val auth = remember { FirebaseAuth.getInstance() }
 
     var nombre by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
-    var rolSeleccionado by remember { mutableStateOf("pasajero") }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Crear Cuenta", style = MaterialTheme.typography.headlineMedium)
+        Text("Crear Cuenta de Pasajero", style = MaterialTheme.typography.headlineMedium)
+        Text("Regístrate para consultar rutas y buses en tiempo real", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
@@ -604,43 +656,15 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
         )
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Selección de Rol
-        Text("¿Qué tipo de usuario eres?", style = MaterialTheme.typography.bodyLarge)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = { rolSeleccionado = "pasajero" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (rolSeleccionado == "pasajero") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Text("Pasajero")
-            }
-            Button(
-                onClick = { rolSeleccionado = "conductor" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (rolSeleccionado == "conductor") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Text("Conductor")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
         Button(
             onClick = {
-                // LÓGICA DE REGISTRO EN FIREBASE
                 if (correo.isNotEmpty() && contrasena.isNotEmpty() && nombre.isNotEmpty()) {
                     auth.createUserWithEmailAndPassword(correo, contrasena)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 val user = auth.currentUser
                                 Toast.makeText(context, "¡Usuario creado exitosamente!", Toast.LENGTH_SHORT).show()
-                                // Enviamos los datos para usarlos en el siguiente paso (Días 8-9)
-                                onRegistroExitoso(user?.uid ?: "", nombre, rolSeleccionado)
+                                onRegistroExitoso(user?.uid ?: "", nombre)
                             } else {
                                 Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                             }
@@ -678,6 +702,10 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     // NUEVO ESTADO: Controla el Ciclo de Vida del Viaje
     var enRecorrido by remember { mutableStateOf(false) }
 
+    // --- ESTADOS PARA INFORME DIARIO ---
+    var horaInicioViaje by remember { mutableStateOf(0L) }
+    var contadorAlertas by remember { mutableStateOf(0) }
+
     // Instancias de Firebase
     val auth = remember { FirebaseAuth.getInstance() }
     val database = remember { FirebaseDatabase.getInstance() }
@@ -706,7 +734,8 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permisos ->
-            permisoConcedido = permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true
+            permisoConcedido = (permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true) || 
+                           (permisos[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
         }
     )
 
@@ -845,8 +874,11 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                             val uid = auth.currentUser?.uid ?: "CONDUCTOR_DESCONOCIDO"
                             val refBuses = database.getReference("buses")
 
-                            // --- LA MAGIA: Buscamos qué bus tiene asignado este conductor ---
+                            Log.e("DepuradorBuses", "INICIANDO CONSULTA: Buscando id_conductor_actual == [$uid]")
+
                             refBuses.orderByChild("id_conductor_actual").equalTo(uid).get().addOnSuccessListener { snapshot ->
+                                Log.e("DepuradorBuses", "RESPUESTA FIREBASE: snapshot.exists() = ${snapshot.exists()}, childrenCount = ${snapshot.childrenCount}")
+                                
                                 if (snapshot.exists()) {
                                     // Encontramos el bus asignado al conductor
                                     val busSnapshot = snapshot.children.first()
@@ -857,11 +889,10 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                     val nuevoRecorridoRef = refRecorridos.push()
                                     val idGenerado = nuevoRecorridoRef.key
 
-                                    // Armamos el viaje con los IDs VERDADEROS de la base de datos
                                     val nuevoRecorrido = RecorridoOficial(
                                         id_usuario = uid,
-                                        id_bus = busIdReal, // <-- ¡DATO REAL!
-                                        id_ruta = rutaIdReal, // <-- ¡DATO REAL!
+                                        id_bus = busIdReal,
+                                        id_ruta = rutaIdReal,
                                         hora_inicio = System.currentTimeMillis(),
                                         hora_fin = null,
                                         estado = "en_curso"
@@ -872,21 +903,23 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                         enRecorrido = true
                                         transmitiendo = true
                                         ultimaUbicacion = "Transmitiendo en 2do plano... 🛡️"
+                                        horaInicioViaje = System.currentTimeMillis()
+                                        contadorAlertas = 0
 
-                                        // Arrancamos el servicio pasándole el ID REAL del bus
                                         val intent = Intent(context, ServicioGpsConductor::class.java)
                                         intent.putExtra("ID_RECORRIDO", idGenerado)
-                                        intent.putExtra("ID_BUS", busIdReal) // <-- LE ENVIAMOS EL ID AL SERVICIO
+                                        intent.putExtra("ID_BUS", busIdReal)
                                         ContextCompat.startForegroundService(context, intent)
 
                                         Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
                                     }
                                 } else {
-                                    // Si el conductor no tiene bus asignado, no lo dejamos transmitir a la deriva
-                                    Toast.makeText(context, "No tienes ningún bus asignado en el sistema", Toast.LENGTH_LONG).show()
+                                    Log.e("DepuradorBuses", "RESULTADO CERO: Firebase dice que no existe un bus con conductor = [$uid]")
+                                    Toast.makeText(context, "0 resultados encontrados para este conductor.", Toast.LENGTH_LONG).show()
                                 }
-                            }.addOnFailureListener {
-                                Toast.makeText(context, "Error buscando bus asignado", Toast.LENGTH_SHORT).show()
+                            }.addOnFailureListener { excepcion ->
+                                Log.e("DepuradorBuses", "FALLO CATASTRÓFICO BASE DE DATOS", excepcion)
+                                Toast.makeText(context, "Fallo: ${excepcion.message}", Toast.LENGTH_LONG).show()
                             }
                         },
                         enabled = permisoConcedido,
@@ -898,28 +931,146 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                     Button(
                         onClick = {
                             if (idRecorridoActual != null) {
+                                val uidConductor = auth.currentUser?.uid ?: "desconocido"
+                                val tiempoActual = System.currentTimeMillis()
+
+                                // 1. CERRAR EL VIAJE ORIGINAL (Para no dañar el historial)
                                 val refRecorrido = database.getReference("recorridos").child(idRecorridoActual!!)
                                 val actualizaciones = mapOf(
-                                    "hora_fin" to ServerValue.TIMESTAMP,
+                                    "hora_fin" to tiempoActual,
                                     "estado" to "finalizado"
                                 )
+                                refRecorrido.updateChildren(actualizaciones)
 
-                                refRecorrido.updateChildren(actualizaciones).addOnSuccessListener {
-                                    Toast.makeText(context, "Viaje Finalizado", Toast.LENGTH_SHORT).show()
-                                    // Detener servicio invulnerable
-                                    val intent = Intent(context, ServicioGpsConductor::class.java)
-                                    context.stopService(intent)
+                                // 2. CÁLCULO MATEMÁTICO E INFORME DIARIO (Evitando división por cero o nulos)
+                                val minutosTotales = if (horaInicioViaje > 0L) {
+                                    (tiempoActual - horaInicioViaje) / 60000
+                                } else {
+                                    0L
                                 }
+
+                                val nuevoInforme = InformeDiario(
+                                    id_recorrido = idRecorridoActual!!,
+                                    id_conductor = uidConductor,
+                                    tiempo_total_minutos = minutosTotales,
+                                    total_alertas_emitidas = contadorAlertas,
+                                    fecha_cierre = tiempoActual
+                                )
+
+                                // 3. ENVIAR EL INFORME A LA NUEVA COLECCIÓN
+                                database.getReference("informes_diarios").push().setValue(nuevoInforme)
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "Cierre exitoso. Informe generado.", Toast.LENGTH_LONG).show()
+                                    }
+
+                                // 4. APAGAR EL ESCUDO GPS NATIVO
+                                val intent = Intent(context, ServicioGpsConductor::class.java)
+                                context.stopService(intent)
                             }
 
+                            // 5. VACIAR LA MEMORIA LOCAL
                             enRecorrido = false
                             transmitiendo = false
+                            ultimaUbicacion = "Viaje finalizado."
                             idRecorridoActual = null
+                            horaInicioViaje = 0L
+                            contadorAlertas = 0
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
                     ) {
                         Text("🛑 Finalizar Recorrido")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- PANEL DE REPORTES DEL CONDUCTOR ---
+                Text("Reportar Incidencia en la Vía", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Trancón",
+                                    estado = "pendiente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Reporte enviado: Trancón", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(end = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) {
+                            Text("Trancón")
+                        }
+                        
+                        Button(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Desvío",
+                                    estado = "pendiente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Reporte enviado: Desvío", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFBC02D)) // Amarillo
+                        ) {
+                            Text("Desvío")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Fallo",
+                                    estado = "pendiente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Reporte enviado: Fallo", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(end = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)) // Naranja
+                        ) {
+                            Text("Fallo")
+                        }
+
+                        Button(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Pánico",
+                                    estado = "urgente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Alerta enviada: Pánico", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) // Verde
+                        ) {
+                            Text("Pánico")
+                        }
                     }
                 }
 
@@ -943,6 +1094,7 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
 fun MapaPopabus(onCerrarSesion: () -> Unit) {
@@ -951,29 +1103,34 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    // ESTADO PARA LA VISTA ACTUAL DE AYUDA (Sugerencias, Acerca De, Preguntas)
+    var vistaAyudaActual by remember { mutableStateOf<String?>(null) }
+
+    // ESTADO PARA EL BOTÓN DE ABORDAJE MANUAL DEL PASAJERO
+    var rastreandoAbordaje by remember { mutableStateOf(false) }
+
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(popayan, 14f)
     }
 
     // --- NUEVO SPRINT 9: ESTADO PARA GUARDAR LA UBICACIÓN DEL PASAJERO ---
-    // Inicia en null porque al abrir la app aún no sabemos dónde está
     var ubicacionPasajero by remember { mutableStateOf<LatLng?>(null) }
-
+    var mostrarDialogoPanico by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permisos ->
-            permisoConcedido = permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true
+            permisoConcedido = (permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true) || 
+                           (permisos[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
             if (permisoConcedido) {
                 Toast.makeText(context, "Ubicando pasajero...", Toast.LENGTH_SHORT).show()
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         val miUbicacion = LatLng(location.latitude, location.longitude)
 
-                        // 1. GUARDAMOS LA UBICACIÓN EN LA MEMORIA DE COMPOSE
                         ubicacionPasajero = miUbicacion
 
-                        // 2. CENTRAMOS LA CÁMARA (Tu código original)
                         coroutineScope.launch {
                             cameraPositionState.animate(
                                 update = CameraUpdateFactory.newLatLngZoom(miUbicacion, 16f),
@@ -986,34 +1143,24 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     )
 
-    // ... (El resto del código hacia abajo, como LaunchedEffect, se mantiene idéntico)
-
     LaunchedEffect(Unit) {
         permissionLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
     }
 
-
-
-// 1. ESTADO PARA MÚLTIPLES BUSES (Corregido para ser 100% reactivo)
     var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
     val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
 
-    // --- NUEVO SPRINT 4: ESTADOS DE INFRAESTRUCTURA ---
     var rutasOficiales by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
     var paraderosOficiales by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
 
-    // NUEVO ESTADO: Control de capas para la UI
     var mostrarRutas by remember { mutableStateOf(true) }
 
-    // --- ESTADOS PARA INCIDENCIAS ---
     var mostrarDialogoIncidencia by remember { mutableStateOf(false) }
     val auth = remember { FirebaseAuth.getInstance() }
-    // --- ESTADO PARA EL BUSCADOR ---
     var textoBusqueda by remember { mutableStateOf("") }
 
-// 2. MOTOR DE RECEPCIÓN ESPACIAL (A prueba de balas + Logs)
     DisposableEffect(Unit) {
         val database = FirebaseDatabase.getInstance()
         val prefijoPasajero = calcularGeohash(popayan.latitude, popayan.longitude, 4)
@@ -1034,12 +1181,10 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 for (busSnapshot in snapshot.children) {
                     val idBus = busSnapshot.key ?: continue
 
-                    // Lectura segura: Extraemos el valor sin importar si es texto o número en Firebase
                     val latObj = busSnapshot.child("latitud").value
                     val lngObj = busSnapshot.child("longitud").value
                     val geohashBus = busSnapshot.child("geohash").value
 
-                    // Lo forzamos a convertirse en Decimal de forma segura
                     val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull()
                     val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull()
 
@@ -1063,13 +1208,12 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         query.addValueEventListener(listener)
         onDispose { query.removeEventListener(listener) }
     }
-    // --- NUEVO SPRINT 4: MOTOR DE INFRAESTRUCTURA (Rutas y Paraderos) ---
+
     DisposableEffect(Unit) {
         val database = FirebaseDatabase.getInstance()
         val refRutas = database.getReference("rutas")
         val refParaderos = database.getReference("paraderos")
 
-        // Listener para Paraderos
         val listenerParaderos = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val listaParaderos = mutableListOf<ParaderoOficial>()
@@ -1087,44 +1231,59 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
             }
         }
 
-// Listener para Rutas (A prueba de balas)
         val listenerRutas = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val listaRutas = mutableListOf<RutaOficial>()
                 for (hijo in snapshot.children) {
                     val idRuta = hijo.key ?: ""
-                    val nombre = hijo.child("nombre_ruta").getValue(String::class.java) ?: ""
+                    val nombre = hijo.child("nombre_ruta").getValue(String::class.java)
+                        ?: hijo.child("nombre").getValue(String::class.java)
+                        ?: ""
                     val origen = hijo.child("origen").getValue(String::class.java) ?: ""
                     val destino = hijo.child("destino").getValue(String::class.java) ?: ""
 
-                    // 1. Inmunidad a errores: forzamos minúsculas y quitamos espacios
-                    val estado = hijo.child("estado").getValue(String::class.java)?.trim()?.lowercase() ?: "activa"
+                    val estadoRaw = hijo.child("estado").getValue(String::class.java)?.trim()?.lowercase() ?: "activa"
 
-                    val geometriaNode = hijo.child("geometria")
+                    val geometriaNode = if (hijo.child("geometria").exists()) hijo.child("geometria")
+                    else if (hijo.child("puntos").exists()) hijo.child("puntos")
+                    else if (hijo.child("coordenadas").exists()) hijo.child("coordenadas")
+                    else hijo.child("geometria")
+
                     val geometriaList = mutableListOf<CoordenadaRuta>()
 
                     for (coord in geometriaNode.children) {
-                        // 2. Extracción segura: lee igual si es texto o número en la base de datos
                         val latObj = coord.child("latitud").value
+                            ?: coord.child("latitude").value
+                            ?: coord.child("lat").value
+                            ?: (coord.value as? Map<*, *>)?.get("latitud")
+                            ?: (coord.value as? Map<*, *>)?.get("latitude")
+                            ?: (coord.value as? Map<*, *>)?.get("lat")
+                            ?: (coord.value as? List<*>)?.getOrNull(0)
+
                         val lngObj = coord.child("longitud").value
+                            ?: coord.child("longitude").value
+                            ?: coord.child("lng").value
+                            ?: (coord.value as? Map<*, *>)?.get("longitud")
+                            ?: (coord.value as? Map<*, *>)?.get("longitude")
+                            ?: (coord.value as? Map<*, *>)?.get("lng")
+                            ?: (coord.value as? List<*>)?.getOrNull(1)
+
                         val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull() ?: 0.0
                         val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull() ?: 0.0
 
-                        // Solo agregamos puntos que no sean cero
-                        if(lat != 0.0 && lng != 0.0){
+                        if (lat != 0.0 && lng != 0.0) {
                             geometriaList.add(CoordenadaRuta(lat, lng))
                         }
                     }
 
-                    // 3. Log espía para ver qué encontró exactamente
-                    Log.d("Infraestructura", "-> Ruta: $nombre | Estado: $estado | Puntos válidos: ${geometriaList.size}")
+                    Log.d("Infraestructura", "-> Ruta: $nombre | Estado: $estadoRaw | Puntos válidos: ${geometriaList.size}")
 
                     listaRutas.add(RutaOficial(
                         id = idRuta,
                         nombre_ruta = nombre,
                         origen = origen,
                         destino = destino,
-                        estado = estado,
+                        estado = estadoRaw,
                         geometria = geometriaList
                     ))
                 }
@@ -1145,229 +1304,655 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     }
 
-
-// 3. EL MAPA Y EL RADAR VISUAL
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-    Box(modifier = Modifier.fillMaxSize()) {
-
-        // 1. El Mapa va al fondo
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = mapProperties
-        ) {
-            // --- NUEVO SPRINT 4: RENDERIZADO DE RUTAS OFICIALES (Polylines) ---
-            if (mostrarRutas) {
-                rutasOficiales.forEach { ruta ->
-                    if (ruta.estado == "activa" && ruta.geometria.isNotEmpty()) {
-                        val puntosLinea = ruta.geometria.map { LatLng(it.latitud, it.longitud) }
-                        com.google.maps.android.compose.Polyline(
-                            points = puntosLinea,
-                            color = Color.Red,
-                            width = 25f
-                        )
-                    }
-                }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text(
+                    text = "Ayuda",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(16.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                NavigationDrawerItem(
+                    label = { Text("Sugerencias") },
+                    selected = false,
+                    onClick = {
+                        vistaAyudaActual = "SUGERENCIAS"
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    label = { Text("Acerca De") },
+                    selected = false,
+                    onClick = {
+                        vistaAyudaActual = "ACERCA"
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    label = { Text("Preguntas Frecuentes") },
+                    selected = false,
+                    onClick = {
+                        vistaAyudaActual = "PREGUNTAS"
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    label = { Text("Actividad (Historial)") },
+                    selected = false,
+                    icon = { Text("⏱️") }, // Ícono simple representado por un emoji de reloj
+                    onClick = {
+                        vistaAyudaActual = "ACTIVIDAD"
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    label = { Text("🚨 SOS - Alerta de Pánico", color = Color.Red) },
+                    selected = false,
+                    onClick = {
+                        mostrarDialogoPanico = true
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
             }
-
-
-// --- NUEVO SPRINT 4: RENDERIZADO DE PARADEROS OFICIALES ---
-            paraderosOficiales.forEach { paradero ->
-                // El diccionario de datos exige que el estado sea "activo"
-                if (paradero.estado == "activo") {
-                    Marker(
-                        state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
-                        title = paradero.nombre,
-                        snippet = paradero.direccion,
-                        // Pintamos el paradero de color verde para distinguirlo en la interfaz
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
-                    )
-                }
-            }
-
-// 4. DIBUJAMOS TODOS LOS BUSES ACTIVOS SIMULTÁNEAMENTE
-            busesEnZona.forEach { (idBus, destino) ->
-                key(idBus) {
-                    // --- NUEVO SPRINT 9: CÁLCULO DE ETA EN TIEMPO REAL ---
-                    val eta = if (ubicacionPasajero != null) {
-                        // Medimos la distancia entre el pasajero y este bus específico
-                        val distancia = calcularDistanciaMetros(ubicacionPasajero!!, destino)
-                        obtenerTextoETA(distancia)
-                    } else {
-                        "Calculando..."
-                    }
-
-                    MarcadorBusAnimado(
-                        idBus = idBus,
-                        destinoLatLng = destino,
-                        icono = iconoBus,
-                        textoEta = eta // Le inyectamos el tiempo estimado al marcador
-                    )
-                }
-            }
-
         }
-
-// 2. EL BUSCADOR Y EL RADAR (TopCenter)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-                .fillMaxWidth(0.9f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Barra de Búsqueda
-            OutlinedTextField(
-                value = textoBusqueda,
-                onValueChange = { textoBusqueda = it },
-                label = { Text("¿A dónde vas?") },
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch { drawerState.open() }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menú principal"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
+                )
+            },
+            containerColor = Color.Transparent
+        ) { innerPadding ->
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp)),
-                singleLine = true,
-                trailingIcon = {
-                    TextButton(
-                        onClick = {
-                            if (textoBusqueda.isNotEmpty()) {
-                                // 1. Conexión a Firebase para Historial
-                                val database = FirebaseDatabase.getInstance()
-                                val refHistorial = database.getReference("historial_busquedas")
-                                val uid = auth.currentUser?.uid ?: ""
-
-                                // 2. Armar paquete de captura silenciosa
-                                val nuevaBusqueda = HistorialBusquedaOficial(
-                                    id_usuario = uid,
-                                    destino_buscado = textoBusqueda,
-                                    rutas_resultado = emptyMap(), // Queda vacío por ahora hasta el motor de búsqueda final
-                                    fecha_busqueda = System.currentTimeMillis()
-                                )
-
-                                // 3. Guardar en BD y limpiar buscador
-                                refHistorial.push().setValue(nuevaBusqueda)
-                                Toast.makeText(context, "Buscando rutas hacia: $textoBusqueda", Toast.LENGTH_SHORT).show()
-                                textoBusqueda = ""
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                // 1. El Mapa va al fondo
+                GoogleMap(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraPositionState = cameraPositionState,
+                    properties = mapProperties
+                ) {
+                    if (mostrarRutas) {
+                        val rutasVisibles = if (textoBusqueda.isBlank()) {
+                            rutasOficiales
+                        } else {
+                            rutasOficiales.filter { r ->
+                                r.nombre_ruta.contains(textoBusqueda, ignoreCase = true) ||
+                                r.origen.contains(textoBusqueda, ignoreCase = true) ||
+                                r.destino.contains(textoBusqueda, ignoreCase = true)
                             }
                         }
-                    ) {
-                        Text("🔍 Buscar")
+
+                        val coloresRutas = listOf(
+                            Color(0xFFD32F2F),
+                            Color(0xFF1976D2),
+                            Color(0xFF388E3C),
+                            Color(0xFFF57C00),
+                            Color(0xFF7B1FA2)
+                        )
+
+                        rutasVisibles.forEachIndexed { index, ruta ->
+                            val esActiva = ruta.estado.isEmpty() ||
+                                           ruta.estado == "activa" ||
+                                           ruta.estado == "activo" ||
+                                           ruta.estado == "enabled" ||
+                                           ruta.estado == "true"
+                            if (esActiva && ruta.geometria.isNotEmpty()) {
+                                val puntosLinea = ruta.geometria.map { LatLng(it.latitud, it.longitud) }
+                                val colorRuta = coloresRutas[index % coloresRutas.size]
+                                com.google.maps.android.compose.Polyline(
+                                    points = puntosLinea,
+                                    color = colorRuta,
+                                    width = 18f
+                                )
+                            }
+                        }
+                    }
+
+                    paraderosOficiales.forEach { paradero ->
+                        if (paradero.estado == "activo") {
+                            Marker(
+                                state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
+                                title = paradero.nombre,
+                                snippet = paradero.direccion,
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                            )
+                        }
+                    }
+
+                    busesEnZona.forEach { (idBus, destino) ->
+                        key(idBus) {
+                            val eta = if (ubicacionPasajero != null) {
+                                val distancia = calcularDistanciaMetros(ubicacionPasajero!!, destino)
+                                obtenerTextoETA(distancia)
+                            } else {
+                                "Calculando..."
+                            }
+
+                            MarcadorBusAnimado(
+                                idBus = idBus,
+                                destinoLatLng = destino,
+                                icono = iconoBus,
+                                textoEta = eta
+                            )
+                        }
                     }
                 }
-            )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                // 2. EL BUSCADOR, RADAR Y CONTROL DE RUTAS
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                        .fillMaxWidth(0.92f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    OutlinedTextField(
+                        value = textoBusqueda,
+                        onValueChange = { textoBusqueda = it },
+                        label = { Text("¿A dónde vas?") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.95f), RoundedCornerShape(12.dp)),
+                        singleLine = true,
+                        trailingIcon = {
+                            if (textoBusqueda.isNotEmpty()) {
+                                IconButton(onClick = { textoBusqueda = "" }) {
+                                    Text("❌")
+                                }
+                            } else {
+                                TextButton(
+                                    onClick = {
+                                        if (textoBusqueda.isNotEmpty()) {
+                                            val database = FirebaseDatabase.getInstance()
+                                            val refHistorial = database.getReference("historial_busquedas")
+                                            val uid = auth.currentUser?.uid ?: ""
 
-            // El Radar original (ahora debajo del buscador)
-            Text(
-                text = "Buses en radar: ${busesEnZona.size}",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.Red,
-                modifier = Modifier
-                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-        // --- NUEVO SPRINT 4: INTERRUPTOR FLOTANTE PARA OCULTAR RUTAS ---
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Ver Rutas", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = mostrarRutas,
-                onCheckedChange = { mostrarRutas = it }
-            )
-        }
-        // LÓGICA DEL DIÁLOGO DE INCIDENCIAS
-        if (mostrarDialogoIncidencia) {
-            DialogoReportarIncidencia(
-                onDismiss = { mostrarDialogoIncidencia = false },
-                onEnviar = { descripcion ->
-                    val database = FirebaseDatabase.getInstance()
-                    val refIncidencias = database.getReference("incidencias")
-                    // Extraemos el UID si está logueado, sino va vacío (para anónimos)
-                    val uid = auth.currentUser?.uid ?: ""
+                                            val nuevaBusqueda = HistorialBusquedaOficial(
+                                                id_usuario = uid,
+                                                destino_buscado = textoBusqueda,
+                                                rutas_resultado = emptyMap(),
+                                                fecha_busqueda = System.currentTimeMillis()
+                                            )
 
-                    val nuevaIncidencia = IncidenciaOficial(
-                        id_usuario = uid,
-                        descripcion = descripcion,
-                        estado = "pendiente",
-                        fecha_reporte = System.currentTimeMillis()
+                                            refHistorial.push().setValue(nuevaBusqueda)
+                                        }
+                                    }
+                                ) {
+                                    Text("🔍 Buscar")
+                                }
+                            }
+                        }
                     )
 
-                    refIncidencias.push().setValue(nuevaIncidencia).addOnSuccessListener {
-                        Toast.makeText(context, "Incidencia reportada. ¡Gracias!", Toast.LENGTH_SHORT).show()
-                        mostrarDialogoIncidencia = false
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al enviar reporte", Toast.LENGTH_SHORT).show()
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Text(
+                                text = "🚌 Buses en radar: ${busesEnZona.size}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color(0xFFD32F2F),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🗺️ Ver Rutas", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Switch(
+                                    checked = mostrarRutas,
+                                    onCheckedChange = { mostrarRutas = it }
+                                )
+                            }
+                        }
+                    }
+
+                    if (textoBusqueda.isNotBlank()) {
+                        val rutasCoincidentes = rutasOficiales.filter { r ->
+                            r.nombre_ruta.contains(textoBusqueda, ignoreCase = true) ||
+                            r.origen.contains(textoBusqueda, ignoreCase = true) ||
+                            r.destino.contains(textoBusqueda, ignoreCase = true)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.98f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                if (rutasCoincidentes.isNotEmpty()) {
+                                    Text(
+                                        "Rutas encontradas (${rutasCoincidentes.size}):",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    rutasCoincidentes.take(4).forEach { ruta ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                                            onClick = {
+                                                if (ruta.geometria.isNotEmpty()) {
+                                                    val primerPunto = LatLng(ruta.geometria.first().latitud, ruta.geometria.first().longitud)
+                                                    coroutineScope.launch {
+                                                        cameraPositionState.animate(
+                                                            update = CameraUpdateFactory.newLatLngZoom(primerPunto, 15f),
+                                                            durationMs = 1500
+                                                        )
+                                                    }
+                                                    Toast.makeText(context, "Centrado en: ${ruta.nombre_ruta}", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("🗺️ ${ruta.nombre_ruta}", style = MaterialTheme.typography.titleMedium)
+                                                    Text("De: ${ruta.origen} ➔ A: ${ruta.destino}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                                }
+                                                Text("Ver 📍", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "❌ No se encontraron rutas para \"$textoBusqueda\"",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.Red
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            )
-        }
 
-// LÓGICA DEL DIÁLOGO DE INCIDENCIAS
-        if (mostrarDialogoIncidencia) {
-            DialogoReportarIncidencia(
-                onDismiss = { mostrarDialogoIncidencia = false },
-                onEnviar = { descripcion ->
+                if (mostrarDialogoIncidencia) {
+                    DialogoReportarIncidencia(
+                        onDismiss = { mostrarDialogoIncidencia = false },
+                        onEnviar = { descripcion ->
+                            val database = FirebaseDatabase.getInstance()
+                            val refIncidencias = database.getReference("incidencias")
+                            val uid = auth.currentUser?.uid ?: ""
+
+                            val lat = ubicacionPasajero?.latitude ?: popayan.latitude
+                            val lng = ubicacionPasajero?.longitude ?: popayan.longitude
+
+                            val nuevaIncidencia = IncidenciaOficial(
+                                id_usuario = uid,
+                                descripcion = descripcion,
+                                estado = "pendiente",
+                                fecha_reporte = System.currentTimeMillis(),
+                                latitud = lat,
+                                longitud = lng
+                            )
+
+                            refIncidencias.push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                Toast.makeText(context, "Incidencia reportada. ¡Gracias!", Toast.LENGTH_SHORT).show()
+                                mostrarDialogoIncidencia = false
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al enviar reporte", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+                // --- TAREA 15: BOTÓN DE PÁNICO DEL PASAJERO ---
+                if (mostrarDialogoPanico) {
+                    AlertDialog(
+                        onDismissRequest = { mostrarDialogoPanico = false },
+                        title = { Text("⚠️ ALERTA DE PÁNICO") },
+                        text = { Text("¿Estás seguro de enviar una alerta de pánico prioritaria?") },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    val database = FirebaseDatabase.getInstance()
+                                    val refIncidencias = database.getReference("incidencias")
+                                    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "anonimo"
+
+                                    val alertaPanico = IncidenciaOficial(
+                                        id_usuario = uid,
+                                        descripcion = "PÁNICO PASAJERO",
+                                        estado = "urgente",
+                                        fecha_reporte = System.currentTimeMillis()
+                                    )
+
+                                    refIncidencias.push().setValue(alertaPanico).addOnSuccessListener {
+                                        Toast.makeText(context, "Alerta enviada a la central", Toast.LENGTH_LONG).show()
+                                        mostrarDialogoPanico = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) {
+                                Text("Enviar Alerta")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { mostrarDialogoPanico = false }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    )
+                }
+
+                // ----------------------------------------------
+
+                if (auth.currentUser != null) {
+                    Button(
+                        onClick = { mostrarDialogoIncidencia = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 32.dp, end = 16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500))
+                    ) {
+                        Text("⚠️ Reportar")
+                    }
+
+                    // BOTÓN DE ABORDAJE (Rastreo de bus actual)
+                    Button(
+                        onClick = {
+                            rastreandoAbordaje = !rastreandoAbordaje
+                            val intentRastreo = Intent(context, ServicioRastreoPasajero::class.java)
+
+                            if (rastreandoAbordaje) {
+                                ContextCompat.startForegroundService(context, intentRastreo)
+                            } else {
+                                context.stopService(intentRastreo)
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(bottom = 32.dp, start = 16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray
+                        )
+                    ) {
+                        Text(if (rastreandoAbordaje) "⏹️ Detener Búsqueda" else "✅ Registrar Abordaje")
+                    }
+                }
+
+                Button(
+                    onClick = onCerrarSesion,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 32.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(if (auth.currentUser != null) "Cerrar Sesión" else "Salir del Mapa")
+                }
+
+                // INYECCIÓN DE LAS VISTAS DE AYUDA (Se superponen al mapa)
+                if (vistaAyudaActual == "ACERCA") {
+                    VistaAcercaDe(onDismiss = { vistaAyudaActual = null })
+                } else if (vistaAyudaActual == "PREGUNTAS") {
+                    VistaPreguntasFrecuentes(onDismiss = { vistaAyudaActual = null })
+                } else if (vistaAyudaActual == "SUGERENCIAS") {
+                    VistaSugerencias(onDismiss = { vistaAyudaActual = null })
+                } else if (vistaAyudaActual == "ACTIVIDAD") {
+                    val misAbordajesSimulados = listOf(
+                        ActividadUsuario("1", "ABC-123", "Ruta 3", System.currentTimeMillis())
+                    )
+                    VistaActividad(
+                        listaActividades = misAbordajesSimulados,
+                        hayInternet = true,
+                        onDismiss = { vistaAyudaActual = null }
+                    )
+                }
+
+            } // Fin del Box
+        } // Fin del Scaffold
+    } // Fin del ModalNavigationDrawer
+}
+
+@Composable
+fun VistaAcercaDe(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Acerca de POPABUS", style = MaterialTheme.typography.titleLarge) },
+        text = { 
+            Text("POPABUS es una plataforma de movilidad para la ciudad de Popayán, diseñada para conectar pasajeros y conductores en tiempo real, mejorando la experiencia del transporte público.") 
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
+}
+
+@Composable
+fun VistaPreguntasFrecuentes(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Preguntas Frecuentes", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column {
+                Text("¿Cómo busco una ruta?", color = MaterialTheme.colorScheme.primary)
+                Text("Usa la barra de búsqueda en la parte superior para ingresar el nombre de la ruta, origen o destino.")
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Text("¿Cómo reporto un problema?", color = MaterialTheme.colorScheme.primary)
+                Text("Toca el botón '⚠️ Reportar' en la esquina inferior derecha para avisarnos de accidentes, desvíos o trancones.")
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("¿Cómo veo los buses en tiempo real?", color = MaterialTheme.colorScheme.primary)
+                Text("Los iconos de buses aparecerán y se moverán automáticamente en el mapa a medida que transmitan su ubicación.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
+}
+
+@Composable
+fun VistaSugerencias(onDismiss: () -> Unit) {
+    var sugerencia by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val auth = remember { FirebaseAuth.getInstance() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Buzón de Sugerencias", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column {
+                Text("¿Tienes alguna sugerencia para mejorar POPABUS? ¡Nos encantaría leerte!")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = sugerencia,
+                    onValueChange = { sugerencia = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    label = { Text("Tu sugerencia...") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (sugerencia.isNotBlank()) {
                     val database = FirebaseDatabase.getInstance()
                     val refIncidencias = database.getReference("incidencias")
                     val uid = auth.currentUser?.uid ?: ""
 
-                    // Extraemos la ubicación del pasajero (o usamos Popayán por defecto si falla)
-                    val lat = ubicacionPasajero?.latitude ?: popayan.latitude
-                    val lng = ubicacionPasajero?.longitude ?: popayan.longitude
-
-                    val nuevaIncidencia = IncidenciaOficial(
+                    // Creamos la incidencia tipo "Sugerencia" (lat/lng en 0.0)
+                    val nuevaSugerencia = IncidenciaOficial(
                         id_usuario = uid,
-                        descripcion = descripcion,
+                        descripcion = "SUGERENCIA: $sugerencia",
                         estado = "pendiente",
                         fecha_reporte = System.currentTimeMillis(),
-                        latitud = lat, // Guardamos la coordenada en Firebase
-                        longitud = lng
+                        latitud = 0.0,
+                        longitud = 0.0
                     )
 
-                    refIncidencias.push().setValue(nuevaIncidencia).addOnSuccessListener {
-                        Toast.makeText(context, "Incidencia reportada. ¡Gracias!", Toast.LENGTH_SHORT).show()
-                        mostrarDialogoIncidencia = false
+                    refIncidencias.push().setValue(nuevaSugerencia).addOnSuccessListener {
+                        Toast.makeText(context, "¡Gracias por tu sugerencia!", Toast.LENGTH_SHORT).show()
+                        onDismiss()
                     }.addOnFailureListener {
-                        Toast.makeText(context, "Error al enviar reporte", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Error al enviar", Toast.LENGTH_SHORT).show()
                     }
                 }
-            )
+            }) {
+                Text("Enviar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
+    )
+}
 
-        // --- NUEVO SPRINT 8: RESTRICCIÓN PARA INVITADOS ---
-        // El botón de reportar solo aparece si hay un usuario autenticado
-        if (auth.currentUser != null) {
-            Button(
-                onClick = { mostrarDialogoIncidencia = true },
+@Composable
+fun VistaActividad(listaActividades: List<ActividadUsuario>, hayInternet: Boolean, onDismiss: () -> Unit = {}) {
+    // 1. Configuramos el ColorMatrix para la escala de grises
+    val colorMatrix = remember(hayInternet) {
+        val matrix = ColorMatrix()
+        if (!hayInternet) {
+            matrix.setToSaturation(0f) // 0f elimina toda la saturación (blanco y negro)
+        }
+        matrix
+    }
+
+    // Usamos un AlertDialog para mantener la consistencia con las otras vistas de ayuda
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { 
+            Text(
+                text = "Historial de Abordajes", 
+                style = MaterialTheme.typography.titleLarge
+            ) 
+        },
+        text = {
+            // 2. Aplicamos el graphicsLayer a todo el contenedor principal
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 32.dp, end = 16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500))
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        // Si no hay internet, inyectamos el filtro a TODA la vista hija
+                        if (!hayInternet) {
+                            colorFilter = ColorFilter.colorMatrix(colorMatrix)
+                        }
+                    }
             ) {
-                Text("⚠️ Reportar")
+                if (listaActividades.isEmpty()) {
+                    // Estado vacío
+                    Text(
+                        text = "Aún no tienes actividad reciente",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                } else {
+                    // Lista de tarjetas
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(listaActividades) { actividad ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "Bus: ${actividad.id_bus}", 
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Ruta: ${actividad.id_ruta}", 
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    
+                                    // Formateo seguro de la fecha
+                                    val fechaFormateada = remember(actividad.fecha_abordaje) {
+                                        val sdf = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.getDefault())
+                                        sdf.format(Date(actividad.fecha_abordaje))
+                                    }
+                                    
+                                    Text(
+                                        text = "Fecha: $fechaFormateada", 
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = "Método: ${actividad.metodo_registro.uppercase()}", 
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { 
+                Text("Cerrar") 
             }
         }
-
-        // 3. El Botón de salida dinámico
-        Button(
-            onClick = onCerrarSesion,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-        ) {
-            Text(if (auth.currentUser != null) "Cerrar Sesión" else "Salir del Mapa")
-        }
-    } // Fin del Box
-} // Fin de la función MapaPopabus
+    )
+}
 
 
 @Composable
@@ -1405,6 +1990,21 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                 Button(onClick = { subPantalla = "BUSES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
                     Text("🚐 Gestionar Buses")
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(onClick = { subPantalla = "REPORTES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("📊 Buzón de Reportes")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(onClick = { subPantalla = "TORRE_CONTROL" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("📡 Torre de Control (Mapa)")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(onClick = { subPantalla = "INFORMES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("📊 Gestión de Informes")
+                }
                 Spacer(modifier = Modifier.height(48.dp))
 
                 Button(
@@ -1418,6 +2018,9 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
         "PARADEROS" -> PantallaGestionParaderos(onVolver = { subPantalla = "MENU" })
         "RUTAS" -> PantallaGestionRutas(onVolver = { subPantalla = "MENU" })
         "BUSES" -> PantallaGestionBuses(onVolver = { subPantalla = "MENU" })
+        "REPORTES" -> PantallaGestionReportes(onVolver = { subPantalla = "MENU" })
+        "TORRE_CONTROL" -> MapaGeneralAdmin(onVolver = { subPantalla = "MENU" })
+        "INFORMES" -> PantallaGestionInformes(onVolver = { subPantalla = "MENU" })
 
         // --- NUEVO SPRINT 11: RUTA A GESTIÓN DE USUARIOS ---
         "USUARIOS" -> PantallaGestionUsuarios(onVolver = { subPantalla = "MENU" })
@@ -1429,6 +2032,8 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
     val context = LocalContext.current
     val database = remember { FirebaseDatabase.getInstance() }
     val refParaderos = database.getReference("paraderos")
+
+    var paraderoSeleccionado by remember { mutableStateOf<ParaderoOficial?>(null) }
 
     // Estados para el formulario
     var nombre by remember { mutableStateOf("") }
@@ -1523,7 +2128,10 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaParaderos) { paradero ->
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { paraderoSeleccionado = paradero },
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1537,6 +2145,73 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        if (paraderoSeleccionado != null) {
+            val paradero = paraderoSeleccionado!!
+            var editNombre by remember(paradero) { mutableStateOf(paradero.nombre) }
+            var editDireccion by remember(paradero) { mutableStateOf(paradero.direccion) }
+
+            AlertDialog(
+                onDismissRequest = { paraderoSeleccionado = null },
+                title = { Text("Editar Paradero", style = MaterialTheme.typography.titleLarge) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editNombre,
+                            onValueChange = { editNombre = it },
+                            label = { Text("Nombre") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editDireccion,
+                            onValueChange = { editDireccion = it },
+                            label = { Text("Dirección") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Geo: ${paradero.latitud}, ${paradero.longitud}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (editNombre.isNotBlank() && editDireccion.isNotBlank()) {
+                            val actualizaciones = mapOf(
+                                "nombre" to editNombre,
+                                "direccion" to editDireccion
+                            )
+                            refParaderos.child(paradero.id).updateChildren(actualizaciones).addOnSuccessListener {
+                                Toast.makeText(context, "Paradero actualizado", Toast.LENGTH_SHORT).show()
+                                paraderoSeleccionado = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Los campos no pueden estar vacíos", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Text("Guardar Cambios")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            refParaderos.child(paradero.id).removeValue().addOnSuccessListener {
+                                Toast.makeText(context, "Paradero eliminado definitivamente", Toast.LENGTH_SHORT).show()
+                                paraderoSeleccionado = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    ) {
+                        Text("🗑️ Borrar Definitivamente")
+                    }
+                }
+            )
+        }
+
         Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
             Text("Volver al Menú")
         }
@@ -1548,6 +2223,8 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
     val context = LocalContext.current
     val database = remember { FirebaseDatabase.getInstance() }
     val refRutas = database.getReference("rutas")
+
+    var rutaSeleccionada by remember { mutableStateOf<RutaOficial?>(null) }
 
     // Estados para el formulario
     var nombreRuta by remember { mutableStateOf("") }
@@ -1633,7 +2310,10 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaRutas) { ruta ->
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { rutaSeleccionada = ruta },
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1647,6 +2327,81 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        if (rutaSeleccionada != null) {
+            val ruta = rutaSeleccionada!!
+            var editNombre by remember(ruta) { mutableStateOf(ruta.nombre_ruta) }
+            var editOrigen by remember(ruta) { mutableStateOf(ruta.origen) }
+            var editDestino by remember(ruta) { mutableStateOf(ruta.destino) }
+
+            AlertDialog(
+                onDismissRequest = { rutaSeleccionada = null },
+                title = { Text("Editar Ruta", style = MaterialTheme.typography.titleLarge) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editNombre,
+                            onValueChange = { editNombre = it },
+                            label = { Text("Nombre") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editOrigen,
+                            onValueChange = { editOrigen = it },
+                            label = { Text("Origen") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editDestino,
+                            onValueChange = { editDestino = it },
+                            label = { Text("Destino") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (editNombre.isNotBlank() && editOrigen.isNotBlank() && editDestino.isNotBlank()) {
+                            val actualizaciones = mapOf(
+                                "nombre_ruta" to editNombre,
+                                "origen" to editOrigen,
+                                "destino" to editDestino
+                            )
+                            refRutas.child(ruta.id).updateChildren(actualizaciones).addOnSuccessListener {
+                                Toast.makeText(context, "Ruta actualizada", Toast.LENGTH_SHORT).show()
+                                rutaSeleccionada = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Los campos no pueden estar vacíos", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Text("Guardar Cambios")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            refRutas.child(ruta.id).removeValue().addOnSuccessListener {
+                                Toast.makeText(context, "Ruta eliminada definitivamente", Toast.LENGTH_SHORT).show()
+                                rutaSeleccionada = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    ) {
+                        Text("🗑️ Borrar Definitivamente")
+                    }
+                }
+            )
+        }
+
         Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
             Text("Volver al Menú")
         }
@@ -1659,6 +2414,8 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
     val context = LocalContext.current
     val database = remember { FirebaseDatabase.getInstance() }
     val refBuses = database.getReference("buses")
+
+    var busSeleccionado by remember { mutableStateOf<BusOficial?>(null) }
 
     // Estados para el formulario alineados a tu diccionario de datos
     var placa by remember { mutableStateOf("") }
@@ -1748,7 +2505,10 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaBuses) { bus ->
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { busSeleccionado = bus },
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1762,6 +2522,91 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (busSeleccionado != null) {
+            val bus = busSeleccionado!!
+            var editPlaca by remember(bus) { mutableStateOf(bus.placa) }
+            var editModelo by remember(bus) { mutableStateOf(bus.modelo) }
+            var editRuta by remember(bus) { mutableStateOf(bus.id_ruta) }
+            var editConductor by remember(bus) { mutableStateOf(bus.id_conductor_actual) }
+
+            AlertDialog(
+                onDismissRequest = { busSeleccionado = null },
+                title = { Text("Editar Vehículo", style = MaterialTheme.typography.titleLarge) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editPlaca,
+                            onValueChange = { editPlaca = it },
+                            label = { Text("Placa") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editModelo,
+                            onValueChange = { editModelo = it },
+                            label = { Text("Modelo/Año") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editRuta,
+                            onValueChange = { editRuta = it },
+                            label = { Text("ID de Ruta") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editConductor,
+                            onValueChange = { editConductor = it },
+                            label = { Text("UID de Conductor") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (editPlaca.isNotBlank()) {
+                            val actualizaciones = mapOf(
+                                "placa" to editPlaca,
+                                "modelo" to editModelo,
+                                "id_ruta" to editRuta,
+                                "id_conductor_actual" to editConductor
+                            )
+                            refBuses.child(bus.id).updateChildren(actualizaciones).addOnSuccessListener {
+                                Toast.makeText(context, "Vehículo actualizado", Toast.LENGTH_SHORT).show()
+                                busSeleccionado = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "La placa no puede estar vacía", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Text("Guardar Cambios")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            refBuses.child(bus.id).removeValue().addOnSuccessListener {
+                                Toast.makeText(context, "Vehículo eliminado definitivamente", Toast.LENGTH_SHORT).show()
+                                busSeleccionado = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    ) {
+                        Text("🗑️ Borrar Definitivamente")
+                    }
+                }
+            )
+        }
 
         Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
             Text("Volver al Menú")
@@ -1813,6 +2658,9 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
 
     // Estado para la lista de usuarios en tiempo real
     var listaUsuarios by remember { mutableStateOf<List<UsuarioOficial>>(emptyList()) }
+    
+    // Estado para el CRUD profundo de un usuario específico
+    var usuarioSeleccionado by remember { mutableStateOf<UsuarioOficial?>(null) }
 
     // Descargamos los usuarios de Firebase en tiempo real
     DisposableEffect(Unit) {
@@ -1845,11 +2693,14 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
         Text("Usuarios Registrados: ${listaUsuarios.size}", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual con BOTONES DE EDICIÓN
+        // Lista visual con funcionalidad CRUD
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaUsuarios) { usuario ->
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { usuarioSeleccionado = usuario }, // Se asigna el usuario al tocar
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1857,41 +2708,70 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                         Text("Rol: ${usuario.rol.uppercase()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                         Text("Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}", style = MaterialTheme.typography.bodySmall)
                         Text("UID: ${usuario.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                }
+            }
+        }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-                        // --- NUEVOS BOTONES DE ACCIÓN (UPDATE) ---
+        // --- DIÁLOGO DE CRUD COMPLETO ---
+        if (usuarioSeleccionado != null) {
+            val usuario = usuarioSeleccionado!!
+
+            AlertDialog(
+                onDismissRequest = { usuarioSeleccionado = null },
+                title = { Text("Perfil de Usuario", style = MaterialTheme.typography.titleLarge) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("👤 Nombre: ${usuario.nombre_completo}", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("🔑 UID: ${usuario.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        val fechaFormateada = remember(usuario.fecha_registro) {
+                            val sdf = java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
+                            sdf.format(java.util.Date(usuario.fecha_registro))
+                        }
+                        Text("📅 Registro: $fechaFormateada", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text("Rol actual: ${usuario.rol.uppercase()}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}", style = MaterialTheme.typography.bodyMedium)
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Botones de Actualización (Update)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // 1. Botón para Suspender / Activar
+                            // Cambiar Estado
                             OutlinedButton(
                                 onClick = {
-                                    val nuevoEstado = !usuario.activo // Invertimos el estado actual
-                                    refUsuarios.child(usuario.id).child("activo").setValue(nuevoEstado)
+                                    val nuevoEstado = !usuario.activo
+                                    refUsuarios.child(usuario.id).updateChildren(mapOf("activo" to nuevoEstado))
                                         .addOnSuccessListener {
-                                            val msj = if (nuevoEstado) "Cuenta Activada" else "Cuenta Suspendida"
-                                            Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Estado actualizado", Toast.LENGTH_SHORT).show()
+                                            usuarioSeleccionado = usuarioSeleccionado?.copy(activo = nuevoEstado)
                                         }
                                 }
                             ) {
                                 Text(if (usuario.activo) "🔴 Suspender" else "🟢 Activar")
                             }
 
-                            // 2. Botón para Cambiar Rol
+                            // Cambiar Rol
                             OutlinedButton(
                                 onClick = {
-                                    // 🛑 REGLA DE SEGURIDAD CORPORATIVA: No se toca a los administradores
                                     if (usuario.rol.lowercase() == "administrador") {
-                                        Toast.makeText(context, "SEGURIDAD: Los administradores solo se gestionan desde la consola web", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Seguridad: No editable", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        // ✅ Ciclo seguro: solo alterna entre pasajero y conductor
                                         val nuevoRol = if (usuario.rol.lowercase() == "pasajero") "conductor" else "pasajero"
-
-                                        refUsuarios.child(usuario.id).child("rol").setValue(nuevoRol)
+                                        refUsuarios.child(usuario.id).updateChildren(mapOf("rol" to nuevoRol))
                                             .addOnSuccessListener {
-                                                Toast.makeText(context, "Rol cambiado a $nuevoRol", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Rol actualizado", Toast.LENGTH_SHORT).show()
+                                                usuarioSeleccionado = usuarioSeleccionado?.copy(rol = nuevoRol)
                                             }
                                     }
                                 }
@@ -1899,6 +2779,400 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                                 Text("🔄 Rol")
                             }
                         }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { usuarioSeleccionado = null }) {
+                        Text("Cerrar")
+                    }
+                },
+                // Botón de Borrado Fuerte (Hard Delete)
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = {
+                            refUsuarios.child(usuario.id).removeValue().addOnSuccessListener {
+                                Toast.makeText(context, "Usuario eliminado definitivamente", Toast.LENGTH_SHORT).show()
+                                usuarioSeleccionado = null
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    ) {
+                        Text("🗑️ Borrar Definitivamente")
+                    }
+                }
+            )
+        }
+
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
+
+@Composable
+fun PantallaGestionReportes(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val database = remember { FirebaseDatabase.getInstance() }
+    val refIncidencias = database.getReference("incidencias")
+
+    // Estado para la lista en tiempo real
+    var listaIncidencias by remember { mutableStateOf<List<IncidenciaOficial>>(emptyList()) }
+
+    // Estado de las pestañas
+    var tabIndex by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Pasajeros", "Conductores")
+
+    // Descargamos las incidencias de Firebase en tiempo real
+    DisposableEffect(Unit) {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val incidencias = mutableListOf<IncidenciaOficial>()
+                for (hijo in snapshot.children) {
+                    val inc = hijo.getValue(IncidenciaOficial::class.java)
+                    if (inc != null) {
+                        incidencias.add(inc)
+                    }
+                }
+                // Ordenamos para que las más recientes aparezcan primero
+                listaIncidencias = incidencias.sortedByDescending { it.fecha_reporte }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refIncidencias.addValueEventListener(listener)
+        onDispose { refIncidencias.removeEventListener(listener) }
+    }
+
+    // --- FILTRO MATEMÁTICO DE MATRIZ OPERATIVA ---
+    val matrizOperativaYPanicos = listOf("trancón", "desvío", "fallo", "pánico")
+
+    val incidenciasFiltradas = listaIncidencias.filter { incidencia ->
+        val descripcionNormalizada = incidencia.descripcion.lowercase()
+        // Verificamos si la descripción contiene alguna palabra clave operativa
+        val esOperativaOPanico = matrizOperativaYPanicos.any { keyword ->
+            descripcionNormalizada.contains(keyword)
+        }
+
+        if (tabIndex == 0) {
+            // Pestaña Pasajeros: NO es operativa, ni pánico (Sugerencias o quejas manuales)
+            !esOperativaOPanico
+        } else {
+            // Pestaña Conductores / Operativa: SÍ es operativa o pánico
+            esOperativaOPanico
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Reportes e Incidencias", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // TAB ROW (Pestañas)
+        androidx.compose.material3.TabRow(selectedTabIndex = tabIndex) {
+            tabs.forEachIndexed { index, title ->
+                androidx.compose.material3.Tab(
+                    selected = tabIndex == index,
+                    onClick = { tabIndex = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Lista de incidencias filtradas
+        if (incidenciasFiltradas.isEmpty()) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text("No hay reportes en esta categoría", color = Color.Gray)
+            }
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                items(incidenciasFiltradas) { incidencia ->
+                    val esUrgente = incidencia.estado.lowercase() == "urgente"
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        // Fondo rojizo suave si es urgente, sino el default
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (esUrgente) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        // Borde rojo intenso si es urgente
+                        border = if (esUrgente) androidx.compose.foundation.BorderStroke(1.dp, Color.Red) else null
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            // Título dinámico
+                            Text(
+                                text = if (esUrgente) "🚨 ALERTA: ${incidencia.estado.uppercase()}" else "📋 Reporte Normal",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (esUrgente) Color.Red else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            // Descripción
+                            Text(
+                                text = incidencia.descripcion,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Formateo de fecha
+                            val fechaFormateada = remember(incidencia.fecha_reporte) {
+                                val sdf = java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
+                                sdf.format(java.util.Date(incidencia.fecha_reporte))
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = "📅 $fechaFormateada", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text(text = "Estado: ${incidencia.estado}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
+
+@Composable
+fun MapaGeneralAdmin(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    var flotaActiva by remember { mutableStateOf<Map<String, PosicionGpsOficial>>(emptyMap()) }
+    
+    // Timer para forzar la recomposición cada cierto tiempo y actualizar los colores de conectividad
+    var tiempoActual by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(5000) // Refresca la conectividad cada 5 segundos
+            tiempoActual = System.currentTimeMillis()
+        }
+    }
+
+    // Descargamos los buses en tiempo real desde Firebase
+    DisposableEffect(Unit) {
+        val database = FirebaseDatabase.getInstance()
+        val refBuses = database.getReference("BusesActivos")
+        
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val mapaTemporal = mutableMapOf<String, PosicionGpsOficial>()
+                for (hijo in snapshot.children) {
+                    val idBus = hijo.key ?: continue
+                    
+                    // Extraemos los datos de la colección (que internamente es BusActivo) 
+                    // y los mapeamos a la clase solicitada PosicionGpsOficial
+                    val latObj = hijo.child("latitud").value
+                    val lngObj = hijo.child("longitud").value
+                    val tsObj = hijo.child("timestamp").value
+                    
+                    val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull() ?: 0.0
+                    val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull() ?: 0.0
+                    val ts = (tsObj as? Number)?.toLong() ?: tsObj?.toString()?.toLongOrNull() ?: 0L
+                    
+                    if (lat != 0.0 && lng != 0.0) {
+                        mapaTemporal[idBus] = PosicionGpsOficial(
+                            id_recorrido = "",
+                            latitud = lat,
+                            longitud = lng,
+                            geohash = "",
+                            velocidad = null,
+                            hora_lectura = ts // Mapeamos timestamp a hora_lectura
+                        )
+                    }
+                }
+                flotaActiva = mapaTemporal
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error conectando con la flota: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refBuses.addValueEventListener(listener)
+        onDispose { refBuses.removeEventListener(listener) }
+    }
+
+    val popayan = LatLng(2.4419, -76.6063)
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(popayan, 13f)
+    }
+
+    val iconoBusNormal = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
+    val iconoBusGris = remember { obtenerIconoBusGris(context, R.drawable.ic_bus) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(isMyLocationEnabled = false)
+        ) {
+            flotaActiva.forEach { (idBus, posicion) ->
+                // Lógica de conectividad: Si la diferencia > 2 minutos (120,000 ms), está desconectado
+                val isDesconectado = (tiempoActual - posicion.hora_lectura) > 120_000L
+                
+                Marker(
+                    state = MarkerState(position = LatLng(posicion.latitud, posicion.longitud)),
+                    title = "Vehículo: $idBus",
+                    snippet = if (isDesconectado) "⚠️ Señal Perdida (+2 min)" else "🟢 Activo",
+                    icon = if (isDesconectado) iconoBusGris else iconoBusNormal
+                )
+            }
+        }
+
+        // Botón flotante para salir de la torre de control
+        androidx.compose.material3.FloatingActionButton(
+            onClick = onVolver,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp),
+            containerColor = Color.White
+        ) {
+            Text("⬅️")
+        }
+    }
+}
+
+@Composable
+fun PantallaGestionInformes(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val database = remember { FirebaseDatabase.getInstance() }
+    val refInformes = database.getReference("informes_diarios")
+
+    var listaInformes by remember { mutableStateOf<List<InformeDiario>>(emptyList()) }
+    var filtroTiempo by remember { mutableStateOf("Diario") }
+
+    DisposableEffect(Unit) {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val informes = mutableListOf<InformeDiario>()
+                for (hijo in snapshot.children) {
+                    val informe = hijo.getValue(InformeDiario::class.java)
+                    if (informe != null) {
+                        informes.add(informe)
+                    }
+                }
+                listaInformes = informes.sortedByDescending { it.fecha_cierre }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refInformes.addValueEventListener(listener)
+        onDispose { refInformes.removeEventListener(listener) }
+    }
+
+    val currentTime = System.currentTimeMillis()
+    val listaFiltrada = remember(listaInformes, filtroTiempo) {
+        listaInformes.filter { informe ->
+            when (filtroTiempo) {
+                "Diario" -> informe.fecha_cierre >= (currentTime - 86400000L)
+                "Semanal" -> informe.fecha_cierre >= (currentTime - 604800000L)
+                "Mensual" -> informe.fecha_cierre >= (currentTime - 2592000000L)
+                else -> true
+            }
+        }
+    }
+
+    val totalInformes = listaFiltrada.size
+    val tiempoPromedio = if (totalInformes > 0) {
+        listaFiltrada.sumOf { it.tiempo_total_minutos } / totalInformes
+    } else {
+        0L
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Gestión de Informes", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Botones de Filtrado
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            listOf("Diario", "Semanal", "Mensual").forEach { filtro ->
+                val seleccionado = filtroTiempo == filtro
+                Button(
+                    onClick = { filtroTiempo = filtro },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (seleccionado) MaterialTheme.colorScheme.primary else Color.LightGray,
+                        contentColor = if (seleccionado) Color.White else Color.Black
+                    )
+                ) {
+                    Text(filtro)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Analítica General", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Total Informes", style = MaterialTheme.typography.bodyMedium)
+                        Text("$totalInformes", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Tiempo Promedio", style = MaterialTheme.typography.bodyMedium)
+                        Text("$tiempoPromedio min", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(listaFiltrada) { informe ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        val fechaFormateada = remember(informe.fecha_cierre) {
+                            val sdf = java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
+                            sdf.format(java.util.Date(informe.fecha_cierre))
+                        }
+                        Text("📅 Cierre: $fechaFormateada", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Conductor ID: ${informe.id_conductor}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Duración del viaje: ${informe.tiempo_total_minutos} min", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = "Alertas emitidas: ${informe.total_alertas_emitidas}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (informe.total_alertas_emitidas > 0) Color.Red else Color.DarkGray
+                        )
                     }
                 }
             }
