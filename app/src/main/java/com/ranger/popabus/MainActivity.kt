@@ -1308,6 +1308,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet {
                 Text(
@@ -1353,15 +1354,6 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
-                NavigationDrawerItem(
-                    label = { Text("🚨 SOS - Alerta de Pánico", color = Color.Red) },
-                    selected = false,
-                    onClick = {
-                        mostrarDialogoPanico = true
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
             }
         }
     ) {
@@ -1387,11 +1379,11 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 )
             },
             containerColor = Color.Transparent
-        ) { innerPadding ->
+        ) { paddingValues ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .padding(paddingValues)
             ) {
                 // 1. El Mapa va al fondo
                 GoogleMap(
@@ -1656,6 +1648,16 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         }
                     )
                 }
+                FloatingActionButton(
+                    onClick = { mostrarDialogoPanico = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 96.dp, end = 16.dp),
+                    containerColor = Color.Red
+                ) {
+                    Text("SOS", color = Color.White)
+                }
+
                 // --- TAREA 15: BOTÓN DE PÁNICO DEL PASAJERO ---
                 if (mostrarDialogoPanico) {
                     AlertDialog(
@@ -1748,11 +1750,36 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 } else if (vistaAyudaActual == "SUGERENCIAS") {
                     VistaSugerencias(onDismiss = { vistaAyudaActual = null })
                 } else if (vistaAyudaActual == "ACTIVIDAD") {
-                    val misAbordajesSimulados = listOf(
-                        ActividadUsuario("1", "ABC-123", "Ruta 3", System.currentTimeMillis())
-                    )
+                    var listaActividades by remember { mutableStateOf<List<ActividadUsuario>>(emptyList()) }
+                    
+                    DisposableEffect(Unit) {
+                        val uid = auth.currentUser?.uid ?: ""
+                        val refHistorial = FirebaseDatabase.getInstance().getReference("actividad_usuario").child(uid)
+                        
+                        val listener = object : ValueEventListener {
+                            override fun onDataChange(snapshot: DataSnapshot) {
+                                val actividades = mutableListOf<ActividadUsuario>()
+                                for (actividadSnapshot in snapshot.children) {
+                                    val actividad = actividadSnapshot.getValue(ActividadUsuario::class.java)
+                                    if (actividad != null) {
+                                        actividades.add(actividad)
+                                    }
+                                }
+                                // Ordenamos de la más reciente a la más antigua
+                                listaActividades = actividades.sortedByDescending { it.fecha_abordaje }
+                            }
+
+                            override fun onCancelled(error: DatabaseError) {
+                                Log.e("Historial", "Error al leer historial", error.toException())
+                            }
+                        }
+                        refHistorial.addValueEventListener(listener)
+                        
+                        onDispose { refHistorial.removeEventListener(listener) }
+                    }
+
                     VistaActividad(
-                        listaActividades = misAbordajesSimulados,
+                        listaActividades = listaActividades,
                         hayInternet = true,
                         onDismiss = { vistaAyudaActual = null }
                     )

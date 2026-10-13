@@ -161,18 +161,19 @@ class ServicioRastreoPasajero : Service() {
         // Extraemos la ruta a la que pertenece ese bus de la colección "buses"
         database.getReference("buses").child(idBus).child("id_ruta").get().addOnSuccessListener { snapshot ->
             val idRuta = snapshot.getValue(String::class.java) ?: "DESCONOCIDA"
+            val uidPasajero = uid
 
-            val refActividad = database.getReference("actividad_usuario").child(uid).push()
+            val nuevaActividadRef = database.getReference("actividad_usuario").child(uidPasajero).push()
             
-            val nuevaActividad = ActividadUsuario(
-                id_actividad = refActividad.key ?: "",
+            val actividad = ActividadUsuario(
+                id_actividad = nuevaActividadRef.key ?: "",
                 id_bus = idBus,
                 id_ruta = idRuta,
                 fecha_abordaje = System.currentTimeMillis(),
                 metodo_registro = "automatico"
             )
 
-            refActividad.setValue(nuevaActividad).addOnSuccessListener {
+            nuevaActividadRef.setValue(actividad).addOnSuccessListener {
                 Log.d("RastreoAbordaje", "Abordaje automático consolidado: $idBus en la ruta $idRuta")
                 stopSelf() // Apagamos el servicio automáticamente
             }.addOnFailureListener {
