@@ -8,6 +8,11 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 
 // --- MODELOS BÁSICOS ---
 @Serializable
@@ -104,39 +109,49 @@ data class BusesActivosResponse(
     val buses: List<BusActivo>
 )
 
-// --- DATOS EN MEMORIA ---
-data class UsuarioEnMemoria(
-    val correo: String,
-    val contrasena: String,
-    val rol: String,
-    val nombre: String,
-    val uid: String
-)
-
-val usuariosDePrueba = listOf(
-    UsuarioEnMemoria("admin@popabus.com",      "admin123",     "administrador", "Administrador Principal", "uid_admin_001"),
-    UsuarioEnMemoria("conductor@popabus.com",  "conductor123", "conductor",     "Juan Conductor",          "uid_conductor_001"),
-    UsuarioEnMemoria("pasajero@popabus.com",   "pasajero123",  "pasajero",      "Pedro Pasajero",          "uid_pasajero_001")
-)
-
-val busesDePrueba = listOf(
-    BusRespuesta(
-        id = "bus_test_001",
-        placa = "ABC-123",
-        modelo = "2024",
-        id_ruta = "ruta_test_001",
-        id_conductor_actual = "uid_conductor_001",
-        estado = "activo"
-    )
-)
-
-// ⚠️ Guarda la última ubicación de cada bus (a nivel global del archivo)
-val ubicacionesActivas = mutableMapOf<String, UbicacionRequest>()
+// --- SEED: Crear los usuarios de prueba al arrancar ---
+fun seedUsuarios() {
+    transaction {
+        val existentes = Usuarios.selectAll().count()
+        if (existentes == 0L) {
+            Usuarios.insert {
+                it[uid] = "uid_admin_001"
+                it[correo] = "admin@popabus.com"
+                it[contrasena] = "admin123"
+                it[nombreCompleto] = "Administrador Principal"
+                it[rol] = "administrador"
+                it[activo] = true
+            }
+            Usuarios.insert {
+                it[uid] = "uid_conductor_001"
+                it[correo] = "conductor@popabus.com"
+                it[contrasena] = "conductor123"
+                it[nombreCompleto] = "Juan Conductor"
+                it[rol] = "conductor"
+                it[activo] = true
+            }
+            Usuarios.insert {
+                it[uid] = "uid_pasajero_001"
+                it[correo] = "pasajero@popabus.com"
+                it[contrasena] = "pasajero123"
+                it[nombreCompleto] = "Pedro Pasajero"
+                it[rol] = "pasajero"
+                it[activo] = true
+            }
+            println("🌱 Usuarios de prueba creados en la base de datos")
+        } else {
+            println("👥 Ya existen $existentes usuarios en la base de datos")
+        }
+    }
+}
 
 fun Application.configureRouting() {
     install(ContentNegotiation) {
         json()
     }
+
+    // Crea los usuarios de prueba al arrancar (solo la primera vez)
+    seedUsuarios()
 
     routing {
         // --- Endpoint de prueba ---
@@ -154,18 +169,31 @@ fun Application.configureRouting() {
         post("/api/auth/login") {
             val request = call.receive<LoginRequest>()
 
-            val usuario = usuariosDePrueba.find {
-                it.correo == request.correo && it.contrasena == request.contrasena
+            val usuario = transaction {
+                Usuarios.selectAll()
+                    .where { Usuarios.correo eq request.correo }
+                    .firstOrNull()
             }
 
-            if (usuario != null) {
+            if (usuario != null && usuario[Usuarios.contrasena] == request.contrasena) {
+                if (!usuario[Usuarios.activo]) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        LoginResponse(
+                            status = "error",
+                            mensaje = "Cuenta suspendida"
+                        )
+                    )
+                    return@post
+                }
+
                 call.respond(
                     LoginResponse(
                         status = "ok",
                         mensaje = "Login exitoso",
-                        rol = usuario.rol,
-                        uid = usuario.uid,
-                        nombre_completo = usuario.nombre
+                        rol = usuario[Usuarios.rol],
+                        uid = usuario[Usuarios.uid],
+                        nombre_completo = usuario[Usuarios.nombreCompleto]
                     )
                 )
             } else {
@@ -183,7 +211,12 @@ fun Application.configureRouting() {
         post("/api/auth/register") {
             val request = call.receive<RegisterRequest>()
 
-            val yaExiste = usuariosDePrueba.any { it.correo == request.correo }
+            val yaExiste = transaction {
+                Usuarios.selectAll()
+                    .where { Usuarios.correo eq request.correo }
+                    .any()
+            }
+
             if (yaExiste) {
                 call.respond(
                     HttpStatusCode.Conflict,
@@ -196,23 +229,27 @@ fun Application.configureRouting() {
             }
 
             val nuevoUid = "uid_${System.currentTimeMillis()}"
-            val nuevoUsuario = UsuarioEnMemoria(
-                correo = request.correo,
-                contrasena = request.contrasena,
-                rol = request.rol,
-                nombre = request.nombre_completo,
-                uid = nuevoUid
-            )
 
-            println("✅ Nuevo usuario registrado: ${nuevoUsuario.nombre} (${nuevoUsuario.correo})")
+            transaction {
+                Usuarios.insert {
+                    it[uid] = nuevoUid
+                    it[correo] = request.correo
+                    it[contrasena] = request.contrasena
+                    it[nombreCompleto] = request.nombre_completo
+                    it[rol] = request.rol
+                    it[activo] = true
+                }
+            }
+
+            println("✅ Nuevo usuario registrado en BD: ${request.nombre_completo} (${request.correo})")
 
             call.respond(
                 RegisterResponse(
                     status = "ok",
                     mensaje = "Usuario registrado exitosamente",
                     uid = nuevoUid,
-                    rol = nuevoUsuario.rol,
-                    nombre_completo = nuevoUsuario.nombre
+                    rol = request.rol,
+                    nombre_completo = request.nombre_completo
                 )
             )
         }
@@ -221,16 +258,35 @@ fun Application.configureRouting() {
         post("/api/ubicacion") {
             val request = call.receive<UbicacionRequest>()
 
-            // ⬇️ Guarda en el Map global
-            ubicacionesActivas[request.id_bus] = request
+            // Guarda o actualiza la ubicación en la BD
+            transaction {
+                val existe = Ubicaciones.selectAll()
+                    .where { Ubicaciones.idBus eq request.id_bus }
+                    .any()
 
-            println(" Ubicación recibida:")
-            println("   Bus: ${request.id_bus}")
-            println("   Recorrido: ${request.id_recorrido}")
-            println("   Lat: ${request.latitud}, Lng: ${request.longitud}")
-            println("   Geohash: ${request.geohash}")
-            println("   Velocidad: ${request.velocidad} m/s")
-            println("    Total buses activos: ${ubicacionesActivas.size}")
+                if (existe) {
+                    Ubicaciones.update({ Ubicaciones.idBus eq request.id_bus }) {
+                        it[idRecorrido] = request.id_recorrido
+                        it[latitud] = request.latitud
+                        it[longitud] = request.longitud
+                        it[geohash] = request.geohash
+                        it[velocidad] = request.velocidad
+                        it[timestamp] = request.timestamp
+                    }
+                } else {
+                    Ubicaciones.insert {
+                        it[idBus] = request.id_bus
+                        it[idRecorrido] = request.id_recorrido
+                        it[latitud] = request.latitud
+                        it[longitud] = request.longitud
+                        it[geohash] = request.geohash
+                        it[velocidad] = request.velocidad
+                        it[timestamp] = request.timestamp
+                    }
+                }
+            }
+
+            println("📍 Ubicación guardada en BD: Bus ${request.id_bus} → ${request.latitud}, ${request.longitud}")
 
             call.respond(
                 UbicacionResponse(
@@ -244,7 +300,17 @@ fun Application.configureRouting() {
         get("/api/buses/conductor/{uid}") {
             val uid = call.parameters["uid"] ?: ""
 
-            val busEncontrado = busesDePrueba.find { it.id_conductor_actual == uid }
+            // Por ahora seguimos usando el bus de prueba en memoria
+            val busEncontrado = if (uid == "uid_conductor_001") {
+                BusRespuesta(
+                    id = "bus_test_001",
+                    placa = "ABC-123",
+                    modelo = "2024",
+                    id_ruta = "ruta_test_001",
+                    id_conductor_actual = "uid_conductor_001",
+                    estado = "activo"
+                )
+            } else null
 
             if (busEncontrado != null) {
                 call.respond(
@@ -265,20 +331,22 @@ fun Application.configureRouting() {
             }
         }
 
-        // --- NUEVO: Devuelve todos los buses activos (para el pasajero) ---
+        // --- Buses activos (para el pasajero) ---
         get("/api/buses/activos") {
-            val listaBuses = ubicacionesActivas.values.map { ubicacion ->
-                BusActivo(
-                    id_bus = ubicacion.id_bus,
-                    latitud = ubicacion.latitud,
-                    longitud = ubicacion.longitud,
-                    geohash = ubicacion.geohash,
-                    velocidad = ubicacion.velocidad,
-                    timestamp = ubicacion.timestamp
-                )
+            val listaBuses = transaction {
+                Ubicaciones.selectAll().map { fila ->
+                    BusActivo(
+                        id_bus = fila[Ubicaciones.idBus],
+                        latitud = fila[Ubicaciones.latitud],
+                        longitud = fila[Ubicaciones.longitud],
+                        geohash = fila[Ubicaciones.geohash],
+                        velocidad = fila[Ubicaciones.velocidad],
+                        timestamp = fila[Ubicaciones.timestamp]
+                    )
+                }
             }
 
-            println(" Pasajero consultó buses activos: ${listaBuses.size} encontrados")
+            println("🚌 Pasajero consultó buses activos: ${listaBuses.size} encontrados")
 
             call.respond(
                 BusesActivosResponse(

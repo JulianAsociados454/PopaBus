@@ -7,7 +7,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
     // ⚠️ IP de tu PC en la red Wi-Fi (verifícala con ipconfig en PowerShell)
-    private const val BASE_URL = "http://192.168.101.72:8080/"
+    private const val BASE_URL = "http://192.168.101.73:8080/"
 
     private val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

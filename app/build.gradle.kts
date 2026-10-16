@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.googleServicesPlugin)
+    kotlin("jvm")
 }
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
@@ -38,8 +39,6 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         compose = true
@@ -74,5 +73,9 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
+    testImplementation(kotlin("test"))
 
+}
+kotlin {
+    jvmToolchain(25)
 }

@@ -1,9 +1,29 @@
-version: '3.8'
-
 services:
   popabus-api:
     build: .
     container_name: popabus-api
     ports:
       - "8080:8080"
+    depends_on:
+      - popabus-db
+    environment:
+      - DATABASE_URL=jdbc:postgresql://popabus-db:5432/popabus
+      - DATABASE_USER=popabus_user
+      - DATABASE_PASSWORD=popabus_pass
     restart: unless-stopped
+
+  popabus-db:
+    image: postgres:16-alpine
+    container_name: popabus-db
+    environment:
+      - POSTGRES_DB=popabus
+      - POSTGRES_USER=popabus_user
+      - POSTGRES_PASSWORD=popabus_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - popabus_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  popabus_data:
