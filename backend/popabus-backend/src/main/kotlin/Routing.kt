@@ -109,6 +109,16 @@ data class BusesActivosResponse(
     val mensaje: String,
     val buses: List<BusActivo>
 )
+@Serializable
+data class ParaderoRespuesta(
+    val id: String = "",
+    val nombre: String,
+    val direccion: String,
+    val latitud: Double,
+    val longitud: Double,
+    val geohash: String = "",
+    val estado: String = "activo"
+)
 
 // --- SEED: Crear los usuarios de prueba al arrancar ---
 fun seedUsuarios() {
@@ -415,6 +425,49 @@ fun Application.configureRouting() {
             } else {
                 call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "mensaje" to "Bus no encontrado"))
             }
+        }
+        // --- ENDPOINTS DE PARADEROS ---
+        get("/api/paraderos") {
+            val lista = transaction {
+                Paraderos.selectAll().map { fila ->
+                    ParaderoRespuesta(
+                        id = fila[Paraderos.id],
+                        nombre = fila[Paraderos.nombre],
+                        direccion = fila[Paraderos.direccion],
+                        latitud = fila[Paraderos.latitud],
+                        longitud = fila[Paraderos.longitud],
+                        geohash = fila[Paraderos.geohash],
+                        estado = fila[Paraderos.estado]
+                    )
+                }
+            }
+            call.respond(lista)
+        }
+
+        post("/api/paraderos") {
+            val request = call.receive<ParaderoRespuesta>()
+            val nuevoId = "par_${System.currentTimeMillis()}"
+
+            transaction {
+                Paraderos.insert {
+                    it[id] = nuevoId
+                    it[nombre] = request.nombre
+                    it[direccion] = request.direccion
+                    it[latitud] = request.latitud
+                    it[longitud] = request.longitud
+                    it[geohash] = request.geohash
+                    it[estado] = "activo"
+                }
+            }
+            println("📍 Paradero creado: ${request.nombre}")
+            call.respond(HttpStatusCode.Created, mapOf("status" to "ok", "id" to nuevoId))
+        }
+
+        delete("/api/paraderos/{id}") {
+            val id = call.parameters["id"] ?: ""
+            val eliminado = transaction { Paraderos.deleteWhere { Paraderos.id eq id } }
+            if (eliminado > 0) call.respond(mapOf("status" to "ok"))
+            else call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
         }
     }
 }

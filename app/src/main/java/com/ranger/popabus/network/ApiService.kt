@@ -81,7 +81,15 @@ data class BusesActivosResponse(
     val mensaje: String,
     val buses: List<BusActivo>
 )
-
+data class ParaderoRespuesta(
+    val id: String = "",
+    val nombre: String,
+    val direccion: String,
+    val latitud: Double,
+    val longitud: Double,
+    val geohash: String = "",
+    val estado: String = "activo"
+)
 
 interface ApiService {
     @GET("/")
@@ -106,5 +114,13 @@ interface ApiService {
 
     @DELETE("/api/buses/{id}")
     suspend fun eliminarBus(@Path("id") id: String): Response<Map<String, String>>
+    @GET("/api/paraderos")
+    suspend fun listarParaderos(): Response<List<ParaderoRespuesta>>
+
+    @POST("/api/paraderos")
+    suspend fun crearParadero(@Body paradero: ParaderoRespuesta): Response<Map<String, String>>
+
+    @DELETE("/api/paraderos/{id}")
+    suspend fun eliminarParadero(@Path("id") id: String): Response<Map<String, String>>
 
 }

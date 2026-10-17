@@ -1439,41 +1439,33 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
         "USUARIOS" -> PantallaGestionUsuarios(onVolver = { subPantalla = "MENU" })
     }
 }
-
 @Composable
 fun PantallaGestionParaderos(onVolver: () -> Unit) {
     val context = LocalContext.current
-    val database = remember { FirebaseDatabase.getInstance() }
-    val refParaderos = database.getReference("paraderos")
+    val scope = rememberCoroutineScope()
 
-    // Estados para el formulario
     var nombre by remember { mutableStateOf("") }
     var direccion by remember { mutableStateOf("") }
     var latitud by remember { mutableStateOf("") }
     var longitud by remember { mutableStateOf("") }
 
-    // Estado para la lista en tiempo real
-    var listaParaderos by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
+    var listaParaderos by remember { mutableStateOf<List<com.ranger.popabus.network.ParaderoRespuesta>>(emptyList()) }
 
-    // Descargamos los paraderos de Firebase en tiempo real
-    DisposableEffect(Unit) {
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val paraderos = mutableListOf<ParaderoOficial>()
-                for (hijo in snapshot.children) {
-                    val p = hijo.getValue(ParaderoOficial::class.java)
-                    if (p != null) {
-                        paraderos.add(p.copy(id = hijo.key ?: ""))
-                    }
+    fun recargarParaderos() {
+        scope.launch {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarParaderos()
+                if (respuesta.isSuccessful) {
+                    listaParaderos = respuesta.body() ?: emptyList()
                 }
-                listaParaderos = paraderos
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e("ParaderosAdmin", "Error listando paraderos: ${e.message}")
             }
         }
-        refParaderos.addValueEventListener(listener)
-        onDispose { refParaderos.removeEventListener(listener) }
+    }
+
+    LaunchedEffect(Unit) {
+        recargarParaderos()
     }
 
     Column(
@@ -1483,7 +1475,6 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
         Text("Gestión de Paraderos", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Formulario alineado a tu diccionario de datos
         OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre (Ej: Parque Caldas)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = direccion, onValueChange = { direccion = it }, label = { Text("Dirección") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -1500,29 +1491,30 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                 val lng = longitud.toDoubleOrNull()
 
                 if (nombre.isNotEmpty() && lat != null && lng != null) {
-                    val nuevoParaderoRef = refParaderos.push() // Firebase genera el _id
-                    val geohash = calcularGeohash(lat, lng) // Reutilizamos tu algoritmo nativo
-
-                    val nuevoParadero = ParaderoOficial(
-                        nombre = nombre,
-                        direccion = direccion,
-                        latitud = lat,
-                        longitud = lng,
-                        geohash = geohash,
-                        estado = "activo"
-                    )
-
-                    nuevoParaderoRef.setValue(nuevoParadero).addOnSuccessListener {
-                        Toast.makeText(context, "Paradero Guardado", Toast.LENGTH_SHORT).show()
-                        nombre = ""
-                        direccion = ""
-                        latitud = ""
-                        longitud = ""
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        try {
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearParadero(
+                                com.ranger.popabus.network.ParaderoRespuesta(
+                                    nombre = nombre,
+                                    direccion = direccion,
+                                    latitud = lat,
+                                    longitud = lng
+                                )
+                            )
+                            if (respuesta.isSuccessful) {
+                                Toast.makeText(context, "Paradero Guardado", Toast.LENGTH_SHORT).show()
+                                nombre = ""
+                                direccion = ""
+                                latitud = ""
+                                longitud = ""
+                                recargarParaderos()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 } else {
-                    Toast.makeText(context, "Llene nombre y coordenadas numéricas válidas", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Llene nombre y coordenadas válidas", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -1531,11 +1523,9 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
         Text("Paraderos Registrados: ${listaParaderos.size}", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual para ver lo que hay en Firebase
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaParaderos) { paradero ->
                 Card(
@@ -1546,13 +1536,29 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                         Text("📍 ${paradero.nombre}", style = MaterialTheme.typography.titleMedium)
                         Text("Dir: ${paradero.direccion}", style = MaterialTheme.typography.bodyMedium)
                         Text("Geo: ${paradero.latitud}, ${paradero.longitud}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val resp = com.ranger.popabus.network.RetrofitClient.apiService.eliminarParadero(paradero.id)
+                                        if (resp.isSuccessful) {
+                                            Toast.makeText(context, "Paradero eliminado", Toast.LENGTH_SHORT).show()
+                                            recargarParaderos()
+                                        }
+                                    } catch (e: Exception) {}
+                                }
+                            }
+                        ) {
+                            Text("🗑️ Eliminar")
+                        }
                     }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
         Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
             Text("Volver al Menú")
         }
