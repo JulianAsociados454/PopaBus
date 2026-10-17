@@ -1,13 +1,13 @@
 import java.util.Properties
 import java.io.FileInputStream
 
-
 plugins {
     alias(libs.plugins.android.application)
+    id("org.jetbrains.kotlin.android") // <-- Forzamos el plugin aquí
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.googleServicesPlugin)
-    kotlin("jvm")
 }
+
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
@@ -27,7 +27,6 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
         manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY") ?: ""
     }
 
@@ -38,15 +37,23 @@ android {
             }
         }
     }
+
     compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
     buildFeatures {
         compose = true
     }
 }
 
-dependencies {
+// Configuración forzada con Toolchain (la forma más segura)
+kotlin {
+    jvmToolchain(17)
+}
 
+dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation(platform("com.google.firebase:firebase-bom:34.10.0"))
     implementation("com.google.firebase:firebase-database")
@@ -69,13 +76,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
-    //nuevas de Juan_felipe//
+
+    // Retrofit
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
-    testImplementation(kotlin("test"))
-
-}
-kotlin {
-    jvmToolchain(25)
 }

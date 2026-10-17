@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
 
 // --- MODELOS BÁSICOS ---
 @Serializable
@@ -355,6 +356,65 @@ fun Application.configureRouting() {
                     buses = listaBuses
                 )
             )
+        }
+        // --- LISTAR TODOS LOS BUSES ---
+        get("/api/buses") {
+            val listaBuses = transaction {
+                Buses.selectAll().map { fila ->
+                    BusRespuesta(
+                        id = fila[Buses.id],
+                        placa = fila[Buses.placa],
+                        modelo = fila[Buses.modelo],
+                        id_ruta = fila[Buses.idRuta],
+                        id_conductor_actual = fila[Buses.idConductorActual],
+                        estado = fila[Buses.estado]
+                    )
+                }
+            }
+            println("🚌 Listando ${listaBuses.size} buses")
+            call.respond(listaBuses)
+        }
+
+        // --- CREAR BUS ---
+        post("/api/buses") {
+            val request = call.receive<BusRespuesta>()
+
+            val nuevoId = "bus_${System.currentTimeMillis()}"
+            val busCreado = transaction {
+                Buses.insert {
+                    it[id] = nuevoId
+                    it[placa] = request.placa
+                    it[modelo] = request.modelo
+                    it[idRuta] = request.id_ruta
+                    it[idConductorActual] = request.id_conductor_actual
+                    it[estado] = "activo"
+                }
+                BusRespuesta(
+                    id = nuevoId,
+                    placa = request.placa,
+                    modelo = request.modelo,
+                    id_ruta = request.id_ruta,
+                    id_conductor_actual = request.id_conductor_actual,
+                    estado = "activo"
+                )
+            }
+
+            println("✅ Bus creado: ${busCreado.placa} (ID: $nuevoId)")
+            call.respond(HttpStatusCode.Created, busCreado)
+        }
+
+        // --- ELIMINAR BUS ---
+        delete("/api/buses/{id}") {
+            val id = call.parameters["id"] ?: ""
+            val eliminado = transaction {
+                Buses.deleteWhere { Buses.id eq id }
+            }
+            if (eliminado > 0) {
+                println("🗑️ Bus eliminado: $id")
+                call.respond(mapOf("status" to "ok", "mensaje" to "Bus eliminado"))
+            } else {
+                call.respond(HttpStatusCode.NotFound, mapOf("status" to "error", "mensaje" to "Bus no encontrado"))
+            }
         }
     }
 }

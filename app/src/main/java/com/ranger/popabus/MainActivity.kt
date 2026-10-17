@@ -1673,37 +1673,35 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
 @Composable
 fun PantallaGestionBuses(onVolver: () -> Unit) {
     val context = LocalContext.current
-    val database = remember { FirebaseDatabase.getInstance() }
-    val refBuses = database.getReference("buses")
+    val scope = rememberCoroutineScope()
 
-    // Estados para el formulario alineados a tu diccionario de datos
+    // Estados del formulario
     var placa by remember { mutableStateOf("") }
     var modelo by remember { mutableStateOf("") }
     var idRuta by remember { mutableStateOf("") }
     var idConductor by remember { mutableStateOf("") }
 
-    // Estado para la lista en tiempo real
-    var listaBuses by remember { mutableStateOf<List<BusOficial>>(emptyList()) }
+    // Lista de buses
+    var listaBuses by remember { mutableStateOf<List<com.ranger.popabus.network.BusRespuesta>>(emptyList()) }
 
-    // Descargamos los buses de Firebase en tiempo real
-    DisposableEffect(Unit) {
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val buses = mutableListOf<BusOficial>()
-                for (hijo in snapshot.children) {
-                    val b = hijo.getValue(BusOficial::class.java)
-                    if (b != null) {
-                        buses.add(b.copy(id = hijo.key ?: ""))
-                    }
+    // Función para recargar la lista
+    fun recargarBuses() {
+        scope.launch {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarBuses()
+                if (respuesta.isSuccessful) {
+                    listaBuses = respuesta.body() ?: emptyList()
+                    Log.d("BusesAdmin", "Cargados ${listaBuses.size} buses")
                 }
-                listaBuses = buses
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e("BusesAdmin", "Error listando buses: ${e.message}")
             }
         }
-        refBuses.addValueEventListener(listener)
-        onDispose { refBuses.removeEventListener(listener) }
+    }
+
+    // Carga inicial
+    LaunchedEffect(Unit) {
+        recargarBuses()
     }
 
     Column(
@@ -1713,7 +1711,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         Text("Gestión de Vehículos", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Formulario alineado a tu diccionario de datos
         OutlinedTextField(value = placa, onValueChange = { placa = it }, label = { Text("Placa (Ej: TJU-123)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = modelo, onValueChange = { modelo = it }, label = { Text("Modelo/Año") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -1727,24 +1724,32 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         Button(
             onClick = {
                 if (placa.isNotEmpty()) {
-                    val nuevoBusRef = refBuses.push() // Firebase genera el _id
-
-                    val nuevoBus = BusOficial(
-                        placa = placa,
-                        modelo = modelo,
-                        id_ruta = idRuta,
-                        id_conductor_actual = idConductor,
-                        estado = "activo"
-                    )
-
-                    nuevoBusRef.setValue(nuevoBus).addOnSuccessListener {
-                        Toast.makeText(context, "Bus Registrado", Toast.LENGTH_SHORT).show()
-                        placa = ""
-                        modelo = ""
-                        idRuta = ""
-                        idConductor = ""
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        try {
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearBus(
+                                com.ranger.popabus.network.BusRespuesta(
+                                    id = "",
+                                    placa = placa,
+                                    modelo = modelo,
+                                    id_ruta = idRuta,
+                                    id_conductor_actual = idConductor,
+                                    estado = "activo"
+                                )
+                            )
+                            if (respuesta.isSuccessful) {
+                                Toast.makeText(context, "Bus Registrado", Toast.LENGTH_SHORT).show()
+                                placa = ""
+                                modelo = ""
+                                idRuta = ""
+                                idConductor = ""
+                                recargarBuses()
+                            } else {
+                                Toast.makeText(context, "Error al guardar (${respuesta.code()})", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Log.e("BusesAdmin", "Error creando bus", e)
+                        }
                     }
                 } else {
                     Toast.makeText(context, "La placa es obligatoria", Toast.LENGTH_SHORT).show()
@@ -1760,7 +1765,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         Text("Vehículos Registrados: ${listaBuses.size}", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual para ver lo que hay en Firebase
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaBuses) { bus ->
                 Card(
@@ -1772,6 +1776,26 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                         Text("Modelo: ${bus.modelo} | Estado: ${bus.estado}", style = MaterialTheme.typography.bodyMedium)
                         Text("Ruta Asignada: ${bus.id_ruta.ifEmpty { "Ninguna" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         Text("Conductor UID: ${bus.id_conductor_actual.ifEmpty { "Ninguno" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.eliminarBus(bus.id)
+                                        if (respuesta.isSuccessful) {
+                                            Toast.makeText(context, "Bus eliminado", Toast.LENGTH_SHORT).show()
+                                            recargarBuses()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("🗑️ Eliminar")
+                        }
                     }
                 }
             }

@@ -2,6 +2,7 @@ package com.ranger.popabus.network
 
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -81,6 +82,7 @@ data class BusesActivosResponse(
     val buses: List<BusActivo>
 )
 
+
 interface ApiService {
     @GET("/")
     suspend fun probarConexion(): Response<MensajeRespuesta>
@@ -96,5 +98,13 @@ interface ApiService {
     suspend fun obtenerBusConductor(@Path("uid") uid: String): Response<BusConductorResponse>
     @GET("/api/buses/activos")
     suspend fun obtenerBusesActivos(): Response<BusesActivosResponse>
+    @GET("/api/buses")
+    suspend fun listarBuses(): Response<List<BusRespuesta>>
+
+    @POST("/api/buses")
+    suspend fun crearBus(@Body bus: BusRespuesta): Response<BusRespuesta>
+
+    @DELETE("/api/buses/{id}")
+    suspend fun eliminarBus(@Path("id") id: String): Response<Map<String, String>>
 
 }
