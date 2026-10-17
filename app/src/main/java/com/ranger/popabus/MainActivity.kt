@@ -12,6 +12,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -184,6 +188,7 @@ data class RutaOficial(
 data class UsuarioOficial(
     val id: String = "", // Este será el UID de Firebase Auth
     val nombre_completo: String = "",
+    val correo: String = "",
     val rol: String = "pasajero",
     val activo: Boolean = true,
     val fecha_registro: Long = 0L
@@ -425,7 +430,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PopaBusTheme {
-                var pantallaActual by remember { mutableStateOf("LOGIN") }
+                var pantallaActual by rememberSaveable { mutableStateOf("LOGIN") }
 
                 when (pantallaActual) {
                     "LOGIN" -> PantallaLogin(
@@ -447,6 +452,7 @@ class MainActivity : ComponentActivity() {
 
                             val datosUsuario = mapOf(
                                 "nombre_completo" to nombreIngresado,
+                                "correo" to (FirebaseAuth.getInstance().currentUser?.email ?: ""),
                                 "rol" to RolUsuario.PASAJERO.key,
                                 "activo" to true,
                                 "fecha_registro" to ServerValue.TIMESTAMP
@@ -543,6 +549,7 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                                                         val rolDefinido = if (esConductor) "conductor" else "pasajero"
                                                         val datosAuto = mapOf(
                                                             "nombre_completo" to (auth.currentUser?.email?.substringBefore("@") ?: "Usuario"),
+                                                            "correo" to (auth.currentUser?.email ?: ""),
                                                             "rol" to rolDefinido,
                                                             "activo" to true,
                                                             "fecha_registro" to ServerValue.TIMESTAMP
@@ -555,6 +562,13 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                                                         onLoginExitoso("pasajero")
                                                     }
                                             } else {
+                                                // Sincronización automática de correo si falta
+                                                val correoBD = snapshot.child("correo").getValue(String::class.java)
+                                                val correoActual = auth.currentUser?.email
+                                                if (correoBD.isNullOrEmpty() && !correoActual.isNullOrEmpty()) {
+                                                    database.getReference("usuarios").child(uid).child("correo").setValue(correoActual)
+                                                }
+
                                                 val activo = snapshot.child("activo").getValue(Boolean::class.java) ?: true
                                                 if (!activo) {
                                                     auth.signOut()
@@ -1098,6 +1112,7 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 @SuppressLint("MissingPermission")
 @Composable
 fun MapaPopabus(onCerrarSesion: () -> Unit) {
+    // Ejecuta la conversión de los 2 recorridos automáticamente al abrir el mapa
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -1105,7 +1120,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     // ESTADO PARA LA VISTA ACTUAL DE AYUDA (Sugerencias, Acerca De, Preguntas)
-    var vistaAyudaActual by remember { mutableStateOf<String?>(null) }
+    var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
 
     // ESTADO PARA EL BOTÓN DE ABORDAJE MANUAL DEL PASAJERO
     var rastreandoAbordaje by remember { mutableStateOf(false) }
@@ -1156,6 +1171,20 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     var paraderosOficiales by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
 
     var mostrarRutas by remember { mutableStateOf(true) }
+
+    // Memoria para saber qué ruta tocó el usuario
+    var idRutaSeleccionada by remember { mutableStateOf<String?>(null) }
+
+    // Paleta de colores distintivos para cada ruta
+    val paletaColores = remember {
+        listOf(
+            Color(0xFF1E88E5), // Azul
+            Color(0xFFE53935), // Rojo
+            Color(0xFF8E24AA), // Morado
+            Color(0xFFFB8C00), // Naranja
+            Color(0xFF00897B)  // Verde Azulado
+        )
+    }
 
     var mostrarDialogoIncidencia by remember { mutableStateOf(false) }
     val auth = remember { FirebaseAuth.getInstance() }
@@ -1354,6 +1383,18 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
+                
+                if (auth.currentUser != null) {
+                    NavigationDrawerItem(
+                        label = { Text("⚠️ Reportar") },
+                        selected = false,
+                        onClick = {
+                            mostrarDialogoIncidencia = true
+                            coroutineScope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
             }
         }
     ) {
@@ -1391,39 +1432,33 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     cameraPositionState = cameraPositionState,
                     properties = mapProperties
                 ) {
+// --- NUEVO SPRINT: RENDERIZADO INTELIGENTE DE RUTAS ---
                     if (mostrarRutas) {
-                        val rutasVisibles = if (textoBusqueda.isBlank()) {
-                            rutasOficiales
-                        } else {
-                            rutasOficiales.filter { r ->
-                                r.nombre_ruta.contains(textoBusqueda, ignoreCase = true) ||
-                                r.origen.contains(textoBusqueda, ignoreCase = true) ||
-                                r.destino.contains(textoBusqueda, ignoreCase = true)
-                            }
-                        }
+                        rutasOficiales.forEachIndexed { index, ruta ->
+                            if (ruta.estado == "activa" && ruta.geometria.isNotEmpty()) {
+                                val colorBase = paletaColores[index % paletaColores.size]
+                                val estaSeleccionada = (idRutaSeleccionada == ruta.id)
+                                val mostrandoTodas = (idRutaSeleccionada == null)
 
-                        val coloresRutas = listOf(
-                            Color(0xFFD32F2F),
-                            Color(0xFF1976D2),
-                            Color(0xFF388E3C),
-                            Color(0xFFF57C00),
-                            Color(0xFF7B1FA2)
-                        )
+                                // Solo dibujamos si estamos viendo todas, o si es la que el usuario seleccionó
+                                if (mostrandoTodas || estaSeleccionada) {
+                                    val puntosLinea = ruta.geometria.map { LatLng(it.latitud, it.longitud) }
 
-                        rutasVisibles.forEachIndexed { index, ruta ->
-                            val esActiva = ruta.estado.isEmpty() ||
-                                           ruta.estado == "activa" ||
-                                           ruta.estado == "activo" ||
-                                           ruta.estado == "enabled" ||
-                                           ruta.estado == "true"
-                            if (esActiva && ruta.geometria.isNotEmpty()) {
-                                val puntosLinea = ruta.geometria.map { LatLng(it.latitud, it.longitud) }
-                                val colorRuta = coloresRutas[index % coloresRutas.size]
-                                com.google.maps.android.compose.Polyline(
-                                    points = puntosLinea,
-                                    color = colorRuta,
-                                    width = 18f
-                                )
+                                    com.google.maps.android.compose.Polyline(
+                                        points = puntosLinea,
+                                        // Si está enfocada brilla al 100%, si no, se vuelve semitransparente (0.4f)
+                                        color = if (estaSeleccionada) colorBase else colorBase.copy(alpha = 0.4f),
+                                        // Si está enfocada es muy gruesa, si no, más delgada
+                                        width = if (estaSeleccionada) 22f else 12f,
+                                        // La seleccionada siempre se dibuja por encima de las demás
+                                        zIndex = if (estaSeleccionada) 2f else 1f,
+                                        clickable = true,
+                                        onClick = {
+                                            // Al tocar la línea, se enfoca. Al tocarla de nuevo, vuelve a mostrar todas.
+                                            idRutaSeleccionada = if (estaSeleccionada) null else ruta.id
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1985,7 +2020,7 @@ fun VistaActividad(listaActividades: List<ActividadUsuario>, hayInternet: Boolea
 @Composable
 fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
     // Memoria interna para navegar dentro del panel de admin sin tocar el MainActivity
-    var subPantalla by remember { mutableStateOf("MENU") }
+    var subPantalla by rememberSaveable { mutableStateOf("MENU") }
 
     when (subPantalla) {
         "MENU" -> {
@@ -2436,6 +2471,7 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionBuses(onVolver: () -> Unit) {
     val context = LocalContext.current
@@ -2452,10 +2488,12 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
     // Estado para la lista en tiempo real
     var listaBuses by remember { mutableStateOf<List<BusOficial>>(emptyList()) }
+    var listaRutas by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
+    var listaConductores by remember { mutableStateOf<List<UsuarioOficial>>(emptyList()) }
 
-    // Descargamos los buses de Firebase en tiempo real
+    // Descargamos los buses, rutas y conductores de Firebase en tiempo real
     DisposableEffect(Unit) {
-        val listener = object : ValueEventListener {
+        val listenerBuses = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val buses = mutableListOf<BusOficial>()
                 for (hijo in snapshot.children) {
@@ -2470,8 +2508,45 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
             }
         }
-        refBuses.addValueEventListener(listener)
-        onDispose { refBuses.removeEventListener(listener) }
+        refBuses.addValueEventListener(listenerBuses)
+        
+        val refRutas = database.getReference("rutas")
+        val listenerRutas = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val rutas = mutableListOf<RutaOficial>()
+                for (hijo in snapshot.children) {
+                    val r = hijo.getValue(RutaOficial::class.java)
+                    if (r != null) {
+                        rutas.add(r.copy(id = hijo.key ?: ""))
+                    }
+                }
+                listaRutas = rutas
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        refRutas.addValueEventListener(listenerRutas)
+
+        val refUsuarios = database.getReference("usuarios")
+        val listenerUsuarios = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val usuarios = mutableListOf<UsuarioOficial>()
+                for (hijo in snapshot.children) {
+                    val u = hijo.getValue(UsuarioOficial::class.java)
+                    if (u != null && u.rol.trim().lowercase() == "conductor") {
+                        usuarios.add(u.copy(id = hijo.key ?: ""))
+                    }
+                }
+                listaConductores = usuarios
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        refUsuarios.addValueEventListener(listenerUsuarios)
+
+        onDispose { 
+            refBuses.removeEventListener(listenerBuses) 
+            refRutas.removeEventListener(listenerRutas)
+            refUsuarios.removeEventListener(listenerUsuarios)
+        }
     }
 
     Column(
@@ -2486,9 +2561,88 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = modelo, onValueChange = { modelo = it }, label = { Text("Modelo/Año") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = idRuta, onValueChange = { idRuta = it }, label = { Text("ID de la Ruta (Opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        
+        // --- DROPDOWN RUTAS ---
+        var expandedRuta by remember { mutableStateOf(false) }
+        val nombreRutaSeleccionada = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta asignada"
+        
+        ExposedDropdownMenuBox(
+            expanded = expandedRuta,
+            onExpandedChange = { expandedRuta = !expandedRuta }
+        ) {
+            OutlinedTextField(
+                value = nombreRutaSeleccionada,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Asignar Ruta") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRuta) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedRuta,
+                onDismissRequest = { expandedRuta = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sin ruta asignada") },
+                    onClick = {
+                        idRuta = ""
+                        expandedRuta = false
+                    }
+                )
+                listaRutas.forEach { ruta ->
+                    DropdownMenuItem(
+                        text = { Text(ruta.nombre_ruta) },
+                        onClick = {
+                            idRuta = ruta.id
+                            expandedRuta = false
+                        }
+                    )
+                }
+            }
+        }
+        
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = idConductor, onValueChange = { idConductor = it }, label = { Text("UID del Conductor (Opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        
+        // --- DROPDOWN CONDUCTORES ---
+        var expandedConductor by remember { mutableStateOf(false) }
+        val nombreConductorSeleccionado = listaConductores.find { it.id == idConductor }?.nombre_completo ?: "Sin conductor asignado"
+
+        ExposedDropdownMenuBox(
+            expanded = expandedConductor,
+            onExpandedChange = { expandedConductor = !expandedConductor }
+        ) {
+            OutlinedTextField(
+                value = nombreConductorSeleccionado,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Asignar Conductor") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedConductor) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedConductor,
+                onDismissRequest = { expandedConductor = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sin conductor asignado") },
+                    onClick = {
+                        idConductor = ""
+                        expandedConductor = false
+                    }
+                )
+                listaConductores.forEach { conductor ->
+                    DropdownMenuItem(
+                        text = { Text(conductor.nombre_completo) },
+                        onClick = {
+                            idConductor = conductor.id
+                            expandedConductor = false
+                        }
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -2531,6 +2685,9 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         // Lista visual para ver lo que hay en Firebase
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaBuses) { bus ->
+                val nombreRuta = listaRutas.find { it.id == bus.id_ruta }?.nombre_ruta ?: "Ninguna"
+                val nombreConductor = listaConductores.find { it.id == bus.id_conductor_actual }?.nombre_completo ?: "Ninguno"
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2541,8 +2698,8 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("🚐 Placa: ${bus.placa}", style = MaterialTheme.typography.titleMedium)
                         Text("Modelo: ${bus.modelo} | Estado: ${bus.estado}", style = MaterialTheme.typography.bodyMedium)
-                        Text("Ruta Asignada: ${bus.id_ruta.ifEmpty { "Ninguna" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        Text("Conductor UID: ${bus.id_conductor_actual.ifEmpty { "Ninguno" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Ruta Asignada: $nombreRuta", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Conductor: $nombreConductor", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
@@ -2578,21 +2735,88 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                             singleLine = true
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editRuta,
-                            onValueChange = { editRuta = it },
-                            label = { Text("ID de Ruta") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editConductor,
-                            onValueChange = { editConductor = it },
-                            label = { Text("UID de Conductor") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
+
+                        // --- DROPDOWN EDITAR RUTA ---
+        var expandedEditRuta by remember { mutableStateOf(false) }
+        val nombreEditRuta = listaRutas.find { it.id == editRuta }?.nombre_ruta ?: "Sin ruta asignada"
+        
+        ExposedDropdownMenuBox(
+            expanded = expandedEditRuta,
+            onExpandedChange = { expandedEditRuta = !expandedEditRuta }
+        ) {
+            OutlinedTextField(
+                value = nombreEditRuta,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Asignar Ruta") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedEditRuta) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedEditRuta,
+                onDismissRequest = { expandedEditRuta = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sin ruta asignada") },
+                    onClick = {
+                        editRuta = ""
+                        expandedEditRuta = false
+                    }
+                )
+                listaRutas.forEach { ruta ->
+                    DropdownMenuItem(
+                        text = { Text(ruta.nombre_ruta) },
+                        onClick = {
+                            editRuta = ruta.id
+                            expandedEditRuta = false
+                        }
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- DROPDOWN EDITAR CONDUCTOR ---
+        var expandedEditConductor by remember { mutableStateOf(false) }
+        val nombreEditConductor = listaConductores.find { it.id == editConductor }?.nombre_completo ?: "Sin conductor asignado"
+
+        ExposedDropdownMenuBox(
+            expanded = expandedEditConductor,
+            onExpandedChange = { expandedEditConductor = !expandedEditConductor }
+        ) {
+            OutlinedTextField(
+                value = nombreEditConductor,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Asignar Conductor") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedEditConductor) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedEditConductor,
+                onDismissRequest = { expandedEditConductor = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sin conductor asignado") },
+                    onClick = {
+                        editConductor = ""
+                        expandedEditConductor = false
+                    }
+                )
+                listaConductores.forEach { conductor ->
+                    DropdownMenuItem(
+                        text = { Text(conductor.nombre_completo) },
+                        onClick = {
+                            editConductor = conductor.id
+                            expandedEditConductor = false
+                        }
+                    )
+                }
+            }
+        }
                     }
                 },
                 confirmButton = {
@@ -2710,6 +2934,20 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
         onDispose { refUsuarios.removeEventListener(listener) }
     }
 
+    // Estado de las pestañas
+    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = listOf("Pasajeros", "Conductores", "Admins")
+
+    val usuariosFiltrados = listaUsuarios.filter { u ->
+        val rolNorm = u.rol.trim().lowercase()
+        when (tabIndex) {
+            0 -> rolNorm == "pasajero"
+            1 -> rolNorm == "conductor"
+            2 -> rolNorm == "administrador"
+            else -> true
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -2717,12 +2955,25 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
         Text("Gestión Humana", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Usuarios Registrados: ${listaUsuarios.size}", style = MaterialTheme.typography.titleMedium)
+        // TAB ROW (Pestañas)
+        androidx.compose.material3.TabRow(selectedTabIndex = tabIndex) {
+            tabs.forEachIndexed { index, title ->
+                androidx.compose.material3.Tab(
+                    selected = tabIndex == index,
+                    onClick = { tabIndex = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Usuarios en esta categoría: ${usuariosFiltrados.size}", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
         // Lista visual con funcionalidad CRUD
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(listaUsuarios) { usuario ->
+            items(usuariosFiltrados) { usuario ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2732,6 +2983,7 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("👤 ${usuario.nombre_completo}", style = MaterialTheme.typography.titleMedium)
+                        Text("📧 Correo: ${usuario.correo.ifEmpty { "Sin sincronizar (requiere iniciar sesión)" }}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
                         Text("Rol: ${usuario.rol.uppercase()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                         Text("Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}", style = MaterialTheme.typography.bodySmall)
                         Text("UID: ${usuario.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -2752,6 +3004,7 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text("👤 Nombre: ${usuario.nombre_completo}", style = MaterialTheme.typography.titleMedium)
+                        Text("📧 Correo: ${usuario.correo.ifEmpty { "Sin sincronizar (requiere iniciar sesión)" }}", style = MaterialTheme.typography.bodyMedium)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("🔑 UID: ${usuario.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         
@@ -2848,7 +3101,7 @@ fun PantallaGestionReportes(onVolver: () -> Unit) {
     var listaIncidencias by remember { mutableStateOf<List<IncidenciaOficial>>(emptyList()) }
 
     // Estado de las pestañas
-    var tabIndex by remember { mutableIntStateOf(0) }
+    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf("Pasajeros", "Conductores")
 
     // Descargamos las incidencias de Firebase en tiempo real
