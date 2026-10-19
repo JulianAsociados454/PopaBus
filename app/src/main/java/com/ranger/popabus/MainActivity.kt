@@ -134,7 +134,8 @@ data class ParaderoOficial(
     val latitud: Double = 0.0,
     val longitud: Double = 0.0,
     val geohash: String = "",
-    val estado: String = "activo"
+    val estado: String = "activo",
+    val idRuta: String = ""
 )
 
 // Representa el historial de viajes (Colección 'recorridos')
@@ -1108,6 +1109,70 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     }
 }
 
+fun generarParaderosDeRutasSiNoExisten(rutas: List<RutaOficial>, paraderosActuales: List<ParaderoOficial>) {
+    val database = FirebaseDatabase.getInstance()
+    val refParaderos = database.getReference("paraderos")
+    
+    rutas.forEachIndexed { index, ruta ->
+        if (ruta.estado == "activa" && ruta.geometria.size >= 2) {
+            val paraderosRuta = paraderosActuales.count { it.idRuta == ruta.id }
+            if (paraderosRuta < 35) {
+                val totalPuntos = ruta.geometria.size
+                var totalDist = 0.0
+                val distancias = DoubleArray(totalPuntos)
+                for (j in 0 until totalPuntos - 1) {
+                    val p1 = ruta.geometria[j]
+                    val p2 = ruta.geometria[j+1]
+                    val dist = calcularDistanciaMetros(LatLng(p1.latitud, p1.longitud), LatLng(p2.latitud, p2.longitud)).toDouble()
+                    distancias[j] = dist
+                    totalDist += dist
+                }
+                
+                val step = totalDist / 34.0
+                
+                for (i in 0..34) {
+                    val targetDist = step * i
+                    var currentDist = 0.0
+                    var lat = ruta.geometria.last().latitud
+                    var lng = ruta.geometria.last().longitud
+                    
+                    if (i == 0) {
+                        lat = ruta.geometria.first().latitud
+                        lng = ruta.geometria.first().longitud
+                    } else if (i < 34) {
+                        for (j in 0 until totalPuntos - 1) {
+                            val segmentDist = distancias[j]
+                            if (currentDist + segmentDist >= targetDist) {
+                                val diff = targetDist - currentDist
+                                val fraction = if (segmentDist > 0) diff / segmentDist else 0.0
+                                val p1 = ruta.geometria[j]
+                                val p2 = ruta.geometria[j+1]
+                                lat = p1.latitud + (p2.latitud - p1.latitud) * fraction
+                                lng = p1.longitud + (p2.longitud - p1.longitud) * fraction
+                                break
+                            }
+                            currentDist += segmentDist
+                        }
+                    }
+                    
+                    val paraderoId = "paradero_${ruta.id}_${i + 1}"
+                    val nuevoParadero = ParaderoOficial(
+                        id = paraderoId,
+                        nombre = "Paradero ${ruta.nombre_ruta.ifEmpty { "Ruta ${index + 1}" }} #${i + 1}",
+                        direccion = "Estación #${i + 1} - ${ruta.nombre_ruta}",
+                        latitud = lat,
+                        longitud = lng,
+                        geohash = calcularGeohash(lat, lng),
+                        estado = "activo",
+                        idRuta = ruta.id
+                    )
+                    refParaderos.child(paraderoId).setValue(nuevoParadero)
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
@@ -1174,12 +1239,21 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     // Memoria para saber qué ruta tocó el usuario
     var idRutaSeleccionada by remember { mutableStateOf<String?>(null) }
+    
+    var paraderosVerificados by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(rutasOficiales, paraderosOficiales) {
+        if (rutasOficiales.isNotEmpty() && !paraderosVerificados) {
+            generarParaderosDeRutasSiNoExisten(rutasOficiales, paraderosOficiales)
+            paraderosVerificados = true
+        }
+    }
 
     // Paleta de colores distintivos para cada ruta
     val paletaColores = remember {
         listOf(
             Color(0xFF1E88E5), // Azul
-            Color(0xFFE53935), // Rojo
+            Color(0xFF2E7D32), // Verde
             Color(0xFF8E24AA), // Morado
             Color(0xFFFB8C00), // Naranja
             Color(0xFF00897B)  // Verde Azulado
@@ -1464,12 +1538,15 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     }
 
                     paraderosOficiales.forEach { paradero ->
-                        if (paradero.estado == "activo") {
+                        if (paradero.estado == "activo" && idRutaSeleccionada != null && idRutaSeleccionada != "NINGUNA" && paradero.idRuta == idRutaSeleccionada) {
+                            val routeIndex = rutasOficiales.indexOfFirst { it.id == paradero.idRuta }
+                            val hue = if (routeIndex == 0) BitmapDescriptorFactory.HUE_AZURE else BitmapDescriptorFactory.HUE_GREEN
+                            
                             Marker(
                                 state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
                                 title = paradero.nombre,
                                 snippet = paradero.direccion,
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                                icon = BitmapDescriptorFactory.defaultMarker(hue)
                             )
                         }
                     }
@@ -2936,15 +3013,15 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
 
     // Estado de las pestañas
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("Pasajeros", "Conductores", "Admins")
+    val tabs = listOf("Pasajeros", "Conductores")
 
     val usuariosFiltrados = listaUsuarios.filter { u ->
         val rolNorm = u.rol.trim().lowercase()
+        if (rolNorm == "administrador") return@filter false
         when (tabIndex) {
             0 -> rolNorm == "pasajero"
             1 -> rolNorm == "conductor"
-            2 -> rolNorm == "administrador"
-            else -> true
+            else -> false
         }
     }
 
@@ -3030,12 +3107,16 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                             // Cambiar Estado
                             OutlinedButton(
                                 onClick = {
-                                    val nuevoEstado = !usuario.activo
-                                    refUsuarios.child(usuario.id).updateChildren(mapOf("activo" to nuevoEstado))
-                                        .addOnSuccessListener {
-                                            Toast.makeText(context, "Estado actualizado", Toast.LENGTH_SHORT).show()
-                                            usuarioSeleccionado = usuarioSeleccionado?.copy(activo = nuevoEstado)
-                                        }
+                                    if (usuario.rol.trim().lowercase() == "administrador") {
+                                        Toast.makeText(context, "Seguridad: Administradores no editables", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        val nuevoEstado = !usuario.activo
+                                        refUsuarios.child(usuario.id).updateChildren(mapOf("activo" to nuevoEstado))
+                                            .addOnSuccessListener {
+                                                Toast.makeText(context, "Estado actualizado", Toast.LENGTH_SHORT).show()
+                                                usuarioSeleccionado = usuarioSeleccionado?.copy(activo = nuevoEstado)
+                                            }
+                                    }
                                 }
                             ) {
                                 Text(if (usuario.activo) "🔴 Suspender" else "🟢 Activar")
@@ -3044,10 +3125,10 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                             // Cambiar Rol
                             OutlinedButton(
                                 onClick = {
-                                    if (usuario.rol.lowercase() == "administrador") {
+                                    if (usuario.rol.trim().lowercase() == "administrador") {
                                         Toast.makeText(context, "Seguridad: No editable", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        val nuevoRol = if (usuario.rol.lowercase() == "pasajero") "conductor" else "pasajero"
+                                        val nuevoRol = if (usuario.rol.trim().lowercase() == "pasajero") "conductor" else "pasajero"
                                         refUsuarios.child(usuario.id).updateChildren(mapOf("rol" to nuevoRol))
                                             .addOnSuccessListener {
                                                 Toast.makeText(context, "Rol actualizado", Toast.LENGTH_SHORT).show()
@@ -3070,11 +3151,15 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                 dismissButton = {
                     OutlinedButton(
                         onClick = {
-                            refUsuarios.child(usuario.id).removeValue().addOnSuccessListener {
-                                Toast.makeText(context, "Usuario eliminado definitivamente", Toast.LENGTH_SHORT).show()
-                                usuarioSeleccionado = null
-                            }.addOnFailureListener {
-                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                            if (usuario.rol.trim().lowercase() == "administrador") {
+                                Toast.makeText(context, "Seguridad: Administradores no se pueden eliminar", Toast.LENGTH_SHORT).show()
+                            } else {
+                                refUsuarios.child(usuario.id).removeValue().addOnSuccessListener {
+                                    Toast.makeText(context, "Usuario eliminado definitivamente", Toast.LENGTH_SHORT).show()
+                                    usuarioSeleccionado = null
+                                }.addOnFailureListener {
+                                    Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         },
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
