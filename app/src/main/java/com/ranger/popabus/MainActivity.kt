@@ -1,5 +1,6 @@
 package com.ranger.popabus
 import android.Manifest
+import androidx.compose.material3.CircularProgressIndicator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
@@ -83,6 +84,21 @@ import androidx.compose.material3.OutlinedButton
 import android.location.Location
 import kotlinx.coroutines.launch
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.runtime.saveable.rememberSaveable
 
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
@@ -505,12 +521,23 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                                 ).show()
                                 onLoginExitoso(datos.rol)
                             } else {
-                                val msj = respuesta.body()?.mensaje ?: "Error ${respuesta.code()}"
+                                // Leemos el mensaje de error real del backend
+                                val errorJson = respuesta.errorBody()?.string()
+                                val msj = if (!errorJson.isNullOrEmpty()) {
+                                    try {
+                                        val jsonObject = org.json.JSONObject(errorJson)
+                                        jsonObject.getString("mensaje")
+                                    } catch (e: Exception) {
+                                        "Error ${respuesta.code()}"
+                                    }
+                                } else {
+                                    "Error ${respuesta.code()}"
+                                }
                                 Toast.makeText(context, msj, Toast.LENGTH_LONG).show()
                             }
                         } catch (e: Exception) {
                             cargando = false
-                            Toast.makeText(context, " Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "❌ Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
                             Log.e("LoginTest", "Error en login", e)
                         }
                     }
@@ -716,38 +743,24 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    // Estados de la interfaz
     var transmitiendo by remember { mutableStateOf(false) }
     var permisoConcedido by remember { mutableStateOf(false) }
-    var ultimaUbicacion by remember { mutableStateOf("Esperando GPS...") }
-
-    // NUEVO ESTADO: Controla el Ciclo de Vida del Viaje
     var enRecorrido by remember { mutableStateOf(false) }
 
-    // Instancias de Firebase
+    // Instancias de Firebase (solo para el radar de buses por ahora)
     val auth = remember { FirebaseAuth.getInstance() }
     val database = remember { FirebaseDatabase.getInstance() }
 
-    // Guarda el ID del viaje generado por Firebase
     var idRecorridoActual by remember { mutableStateOf<String?>(null) }
-    // Solicitud de permisos
 
-    // --- NUEVO SPRINT 10: CÁMARA DEL MAPA TÁCTICO ---
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(popayan, 15f)
     }
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-
-    // --- NUEVO SPRINT 10: ESTADOS PARA LOS COMPAÑEROS DE RUTA ---
     var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
-    // --- NUEVO SPRINT 10: ESTADOS PARA INCIDENCIAS ---
-    var incidenciasActivas by remember { mutableStateOf<List<IncidenciaOficial>>(emptyList()) }
     val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
-
-
-
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -756,181 +769,113 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
         }
     )
 
-    // Pedir permisos de ubicación nada más entrar al panel
     LaunchedEffect(Unit) {
         permissionLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
     }
 
-
-    // --- NUEVO SPRINT 10: MOTOR DE RADAR (ESCUCHA A LOS COMPAÑEROS) ---
+    // RADAR DE COMPAÑEROS (Dejamos Firebase aquí por ahora para no romper el radar)
     DisposableEffect(Unit) {
         val database = FirebaseDatabase.getInstance()
         val prefijoCentro = calcularGeohash(popayan.latitude, popayan.longitude, 4)
-
         val query = database.getReference("BusesActivos")
-            .orderByChild("geohash")
-            .startAt(prefijoCentro)
-            .endAt(prefijoCentro + "\uf8ff")
-
+            .orderByChild("geohash").startAt(prefijoCentro).endAt(prefijoCentro + "\uf8ff")
         query.keepSynced(true)
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val busesRecibidos = mutableMapOf<String, LatLng>()
                 for (busSnapshot in snapshot.children) {
                     val idBus = busSnapshot.key ?: continue
-
                     val latObj = busSnapshot.child("latitud").value
                     val lngObj = busSnapshot.child("longitud").value
-
                     val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull()
                     val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull()
-
-                    if (lat != null && lng != null) {
-                        busesRecibidos[idBus] = LatLng(lat, lng)
-                    }
+                    if (lat != null && lng != null) busesRecibidos[idBus] = LatLng(lat, lng)
                 }
                 busesEnZona = busesRecibidos
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("Firebase", "Error en radar del conductor", error.toException())
-            }
+            override fun onCancelled(error: DatabaseError) {}
         }
         query.addValueEventListener(listener)
         onDispose { query.removeEventListener(listener) }
     }
 
-    // MOTOR DE TRANSMISIÓN: Se activa cuando 'transmitiendo' es true
-// MOTOR DE TRANSMISIÓN: Se activa cuando 'transmitiendo' es true
-    // --- NUEVO SPRINT 10: MOTOR DE ALERTAS EN LA VÍA ---
-    DisposableEffect(Unit) {
-        val refIncidencias = FirebaseDatabase.getInstance().getReference("incidencias")
-        val listenerAlertas = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val alertas = mutableListOf<IncidenciaOficial>()
-                for (hijo in snapshot.children) {
-                    val inc = hijo.getValue(IncidenciaOficial::class.java)
-                    // Solo mostramos las alertas que estén pendientes y tengan coordenadas
-                    if (inc != null && inc.estado == "pendiente" && inc.latitud != 0.0) {
-                        alertas.add(inc)
-                    }
+    // --- MOTOR DE ALERTAS EN LA VÍA (AHORA LEE DE POSTGRESQL) ---
+    var incidenciasActivas by remember { mutableStateOf<List<com.ranger.popabus.network.IncidenciaRespuesta>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarIncidencias()
+                if (respuesta.isSuccessful) {
+                    incidenciasActivas = respuesta.body()?.filter { it.latitud != 0.0 } ?: emptyList()
                 }
-                incidenciasActivas = alertas
+            } catch (e: Exception) {
+                Log.e("ConductorIncidencias", "Error: ${e.message}")
             }
-            override fun onCancelled(error: DatabaseError) {}
+            delay(5000) // Consulta cada 5 segundos
         }
-        refIncidencias.addValueEventListener(listenerAlertas)
-        onDispose { refIncidencias.removeEventListener(listenerAlertas) }
     }
 
-
-
-
-
-
-
-// --- NUEVA UI TÁCTICA DEL CONDUCTOR (SPRINT 10) ---
     Box(modifier = Modifier.fillMaxSize()) {
-
-// 1. EL MAPA DE FONDO
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = mapProperties
         ) {
-            // --- NUEVO SPRINT 10: DIBUJAR A LOS COMPAÑEROS ---
             busesEnZona.forEach { (idBus, destino) ->
                 key(idBus) {
-                    // Reutilizamos el componente inteligente del Sprint 9
-                    MarcadorBusAnimado(
-                        idBus = idBus,
-                        destinoLatLng = destino,
-                        icono = iconoBus,
-                        textoEta = "Compañero" // Para el conductor, solo es un indicador de que es otro bus
-                    )
+                    MarcadorBusAnimado(idBus, destino, iconoBus, "Compañero")
                 }
             }
-            // --- NUEVO SPRINT 10: DIBUJAR INCIDENCIAS EN LA VÍA ---
             incidenciasActivas.forEach { incidencia ->
                 Marker(
                     state = MarkerState(position = LatLng(incidencia.latitud, incidencia.longitud)),
                     title = "⚠️ Alerta Reportada",
                     snippet = incidencia.descripcion,
-                    // Usamos un pin color naranja para que el conductor lo distinga de los paraderos
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
                 )
             }
         }
 
-        // 2. PANEL DE CONTROL FLOTANTE (Abajo)
         Card(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = if (!enRecorrido) "Panel Táctico" else "🟢 Viaje en Curso",
                     style = MaterialTheme.typography.titleLarge,
-                    color = if (!enRecorrido) Color.Black else Color(0xFF006400) // Verde oscuro si está en viaje
+                    color = if (!enRecorrido) Color.Black else Color(0xFF006400)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // LÓGICA VISUAL DEL RECORRIDO (Tus botones originales)
                 if (!enRecorrido) {
-// Botón para INICIAR
                     Button(
                         onClick = {
-                            // ⚠️ UID hardcodeado para la prueba con el usuario conductor@popabus.com
-                            // (en el futuro lo obtendremos del login)
                             val uidConductor = "uid_conductor_001"
-
                             scope.launch {
                                 try {
-                                    val respuesta = com.ranger.popabus.network.RetrofitClient.apiService
-                                        .obtenerBusConductor(uidConductor)
-
+                                    val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusConductor(uidConductor)
                                     if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
                                         val bus = respuesta.body()!!.bus!!
-                                        val busIdReal = bus.id
-                                        val rutaIdReal = bus.id_ruta
-
-                                        // Generamos un ID de recorrido local (no usamos Firebase)
                                         val idGenerado = "rec_${System.currentTimeMillis()}"
-
                                         idRecorridoActual = idGenerado
                                         enRecorrido = true
                                         transmitiendo = true
-                                        ultimaUbicacion = "Transmitiendo en 2do plano... 🛡️"
 
-                                        // Arrancamos el servicio GPS
                                         val intent = Intent(context, ServicioGpsConductor::class.java)
                                         intent.putExtra("ID_RECORRIDO", idGenerado)
-                                        intent.putExtra("ID_BUS", busIdReal)
+                                        intent.putExtra("ID_BUS", bus.id)
                                         ContextCompat.startForegroundService(context, intent)
-
-                                        Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Viaje Iniciado", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(
-                                            context,
-                                            "No tienes ningún bus asignado en el sistema",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        Toast.makeText(context, "No tienes bus asignado", Toast.LENGTH_LONG).show()
                                     }
                                 } catch (e: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        "❌ Error buscando bus: ${e.message}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    Log.e("Conductor", "Error en obtenerBusConductor", e)
+                                    Toast.makeText(context, "Error de red", Toast.LENGTH_LONG).show()
                                 }
                             }
                         },
@@ -942,24 +887,11 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                 } else {
                     Button(
                         onClick = {
-                            if (idRecorridoActual != null) {
-                                val refRecorrido = database.getReference("recorridos").child(idRecorridoActual!!)
-                                val actualizaciones = mapOf(
-                                    "hora_fin" to ServerValue.TIMESTAMP,
-                                    "estado" to "finalizado"
-                                )
-
-                                refRecorrido.updateChildren(actualizaciones).addOnSuccessListener {
-                                    Toast.makeText(context, "Viaje Finalizado", Toast.LENGTH_SHORT).show()
-                                    // Detener servicio invulnerable
-                                    val intent = Intent(context, ServicioGpsConductor::class.java)
-                                    context.stopService(intent)
-                                }
-                            }
-
                             enRecorrido = false
                             transmitiendo = false
                             idRecorridoActual = null
+                            context.stopService(Intent(context, ServicioGpsConductor::class.java))
+                            Toast.makeText(context, "Viaje Finalizado", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.fillMaxWidth()
@@ -970,12 +902,85 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Botón de Cerrar Sesión
+                // --- NUEVOS BOTONES DE REPORTE (INTEGRADOS A POSTGRESQL) ---
+                Text("Reportar Incidencia en la Vía", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                        com.ranger.popabus.network.IncidenciaRespuesta(
+                                            id_usuario = "uid_conductor_001", descripcion = "Trancón",
+                                            estado = "pendiente", fecha_reporte = System.currentTimeMillis()
+                                        )
+                                    )
+                                    Toast.makeText(context, "Trancón reportado", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(end = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) { Text("Trancón") }
+
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                        com.ranger.popabus.network.IncidenciaRespuesta(
+                                            id_usuario = "uid_conductor_001", descripcion = "Desvío",
+                                            estado = "pendiente", fecha_reporte = System.currentTimeMillis()
+                                        )
+                                    )
+                                    Toast.makeText(context, "Desvío reportado", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFBC02D))
+                        ) { Text("Desvío") }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                        com.ranger.popabus.network.IncidenciaRespuesta(
+                                            id_usuario = "uid_conductor_001", descripcion = "Fallo Mecánico",
+                                            estado = "pendiente", fecha_reporte = System.currentTimeMillis()
+                                        )
+                                    )
+                                    Toast.makeText(context, "Fallo reportado", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(end = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                        ) { Text("Fallo") }
+
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                        com.ranger.popabus.network.IncidenciaRespuesta(
+                                            id_usuario = "uid_conductor_001", descripcion = "Pánico Conductor",
+                                            estado = "urgente", fecha_reporte = System.currentTimeMillis()
+                                        )
+                                    )
+                                    Toast.makeText(context, "Alerta enviada", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                        ) { Text("Pánico") }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Button(
                     onClick = {
                         transmitiendo = false
-                        val intent = Intent(context, ServicioGpsConductor::class.java)
-                        context.stopService(intent)
+                        context.stopService(Intent(context, ServicioGpsConductor::class.java))
                         onCerrarSesion()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
@@ -988,43 +993,46 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
 fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
+
+    // Estado para las alertas (pines naranjas)
+    var incidenciasActivas by remember { mutableStateOf<List<com.ranger.popabus.network.IncidenciaRespuesta>>(emptyList()) }
+
+    // --- VARIABLES DE TU AMIGO (Menú y SOS) ---
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
+    var rastreandoAbordaje by remember { mutableStateOf(false) }
+    var mostrarDialogoPanico by remember { mutableStateOf(false) }
 
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(popayan, 14f)
     }
 
-    // --- NUEVO SPRINT 9: ESTADO PARA GUARDAR LA UBICACIÓN DEL PASAJERO ---
-    // Inicia en null porque al abrir la app aún no sabemos dónde está
     var ubicacionPasajero by remember { mutableStateOf<LatLng?>(null) }
+    var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
+    val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
+    var textoBusqueda by remember { mutableStateOf("") }
 
+    // Permisos
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permisos ->
             permisoConcedido = permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true
             if (permisoConcedido) {
-                Toast.makeText(context, "Ubicando pasajero...", Toast.LENGTH_SHORT).show()
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         val miUbicacion = LatLng(location.latitude, location.longitude)
-
-                        // 1. GUARDAMOS LA UBICACIÓN EN LA MEMORIA DE COMPOSE
                         ubicacionPasajero = miUbicacion
-
-                        // 2. CENTRAMOS LA CÁMARA (Tu código original)
                         coroutineScope.launch {
-                            cameraPositionState.animate(
-                                update = CameraUpdateFactory.newLatLngZoom(miUbicacion, 16f),
-                                durationMs = 2000
-                            )
+                            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(miUbicacion, 16f), 2000)
                         }
                     }
                 }
@@ -1032,34 +1040,11 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     )
 
-    // ... (El resto del código hacia abajo, como LaunchedEffect, se mantiene idéntico)
-
     LaunchedEffect(Unit) {
-        permissionLauncher.launch(
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-        )
+        permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-
-
-// 1. ESTADO PARA MÚLTIPLES BUSES (Corregido para ser 100% reactivo)
-    var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
-    val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
-
-    // --- NUEVO SPRINT 4: ESTADOS DE INFRAESTRUCTURA ---
-    var rutasOficiales by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
-    var paraderosOficiales by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
-
-    // NUEVO ESTADO: Control de capas para la UI
-    var mostrarRutas by remember { mutableStateOf(true) }
-
-    // --- ESTADOS PARA INCIDENCIAS ---
-    var mostrarDialogoIncidencia by remember { mutableStateOf(false) }
-    val auth = remember { FirebaseAuth.getInstance() }
-    // --- ESTADO PARA EL BUSCADOR ---
-    var textoBusqueda by remember { mutableStateOf("") }
-
-    // 2. MOTOR DE RECEPCIÓN DE BUSES (desde el backend con Retrofit)
+    // --- MOTOR 1: Busca los buses en PostgreSQL ---
     LaunchedEffect(Unit) {
         while (true) {
             try {
@@ -1071,325 +1056,195 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
                     }
                     busesEnZona = mapa
-                    Log.d("PasajeroBackend", "🚌 ${mapa.size} buses recibidos del backend")
                 }
             } catch (e: Exception) {
-                Log.e("PasajeroBackend", "Error consultando buses: ${e.message}")
+                Log.e("PasajeroBackend", "Error buses: ${e.message}")
             }
-            delay(3000) // Consulta cada 3 segundos
+            delay(3000)
         }
     }
-    // --- NUEVO SPRINT 4: MOTOR DE INFRAESTRUCTURA (Rutas y Paraderos) ---
-    DisposableEffect(Unit) {
-        val database = FirebaseDatabase.getInstance()
-        val refRutas = database.getReference("rutas")
-        val refParaderos = database.getReference("paraderos")
 
-        // Listener para Paraderos
-        val listenerParaderos = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val listaParaderos = mutableListOf<ParaderoOficial>()
-                for (hijo in snapshot.children) {
-                    val p = hijo.getValue(ParaderoOficial::class.java)
-                    if (p != null) {
-                        listaParaderos.add(p.copy(id = hijo.key ?: ""))
-                    }
+    // --- MOTOR 2: Busca las alertas (Incidencias) en PostgreSQL ---
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarIncidencias()
+                if (respuesta.isSuccessful) {
+                    // Filtramos para que solo muestre las que tienen coordenadas
+                    incidenciasActivas = respuesta.body()?.filter { it.latitud != 0.0 } ?: emptyList()
                 }
-                paraderosOficiales = listaParaderos
-                Log.d("Infraestructura", "Descargados ${listaParaderos.size} paraderos.")
+            } catch (e: Exception) {
+                Log.e("PasajeroBackend", "Error alertas: ${e.message}")
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("Infraestructura", "Error leyendo paraderos", error.toException())
+            delay(5000) // Consulta cada 5 segundos
+        }
+    }
+
+    val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text("Ayuda", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                NavigationDrawerItem(label = { Text("Sugerencias") }, selected = false, onClick = { vistaAyudaActual = "SUGERENCIAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
             }
         }
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Menú")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+            },
+            containerColor = Color.Transparent
+        ) { paddingValues ->
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-// Listener para Rutas (A prueba de balas)
-        val listenerRutas = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val listaRutas = mutableListOf<RutaOficial>()
-                for (hijo in snapshot.children) {
-                    val idRuta = hijo.key ?: ""
-                    val nombre = hijo.child("nombre_ruta").getValue(String::class.java) ?: ""
-                    val origen = hijo.child("origen").getValue(String::class.java) ?: ""
-                    val destino = hijo.child("destino").getValue(String::class.java) ?: ""
-
-                    // 1. Inmunidad a errores: forzamos minúsculas y quitamos espacios
-                    val estado = hijo.child("estado").getValue(String::class.java)?.trim()?.lowercase() ?: "activa"
-
-                    val geometriaNode = hijo.child("geometria")
-                    val geometriaList = mutableListOf<CoordenadaRuta>()
-
-                    for (coord in geometriaNode.children) {
-                        // 2. Extracción segura: lee igual si es texto o número en la base de datos
-                        val latObj = coord.child("latitud").value
-                        val lngObj = coord.child("longitud").value
-                        val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull() ?: 0.0
-                        val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull() ?: 0.0
-
-                        // Solo agregamos puntos que no sean cero
-                        if(lat != 0.0 && lng != 0.0){
-                            geometriaList.add(CoordenadaRuta(lat, lng))
+                GoogleMap(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraPositionState = cameraPositionState,
+                    properties = mapProperties
+                ) {
+                    // Dibujar Buses
+                    busesEnZona.forEach { (idBus, destino) ->
+                        key(idBus) {
+                            val eta = if (ubicacionPasajero != null) {
+                                obtenerTextoETA(calcularDistanciaMetros(ubicacionPasajero!!, destino))
+                            } else "Calculando..."
+                            MarcadorBusAnimado(idBus, destino, iconoBus, eta)
                         }
                     }
 
-                    // 3. Log espía para ver qué encontró exactamente
-                    Log.d("Infraestructura", "-> Ruta: $nombre | Estado: $estado | Puntos válidos: ${geometriaList.size}")
-
-                    listaRutas.add(RutaOficial(
-                        id = idRuta,
-                        nombre_ruta = nombre,
-                        origen = origen,
-                        destino = destino,
-                        estado = estado,
-                        geometria = geometriaList
-                    ))
-                }
-                rutasOficiales = listaRutas
-                Log.d("Infraestructura", "Descargadas ${listaRutas.size} rutas.")
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("Infraestructura", "Error leyendo rutas", error.toException())
-            }
-        }
-
-        refParaderos.addValueEventListener(listenerParaderos)
-        refRutas.addValueEventListener(listenerRutas)
-
-        onDispose {
-            refParaderos.removeEventListener(listenerParaderos)
-            refRutas.removeEventListener(listenerRutas)
-        }
-    }
-
-
-// 3. EL MAPA Y EL RADAR VISUAL
-    val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
-
-    Box(modifier = Modifier.fillMaxSize()) {
-
-        // 1. El Mapa va al fondo
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = mapProperties
-        ) {
-            // --- NUEVO SPRINT 4: RENDERIZADO DE RUTAS OFICIALES (Polylines) ---
-            if (mostrarRutas) {
-                rutasOficiales.forEach { ruta ->
-                    if (ruta.estado == "activa" && ruta.geometria.isNotEmpty()) {
-                        val puntosLinea = ruta.geometria.map { LatLng(it.latitud, it.longitud) }
-                        com.google.maps.android.compose.Polyline(
-                            points = puntosLinea,
-                            color = Color.Red,
-                            width = 25f
+                    // Dibujar Alertas (Pines Naranjas)
+                    incidenciasActivas.forEach { incidencia ->
+                        Marker(
+                            state = MarkerState(position = LatLng(incidencia.latitud, incidencia.longitud)),
+                            title = "⚠️ Alerta",
+                            snippet = incidencia.descripcion,
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
                         )
                     }
                 }
-            }
 
-
-// --- NUEVO SPRINT 4: RENDERIZADO DE PARADEROS OFICIALES ---
-            paraderosOficiales.forEach { paradero ->
-                // El diccionario de datos exige que el estado sea "activo"
-                if (paradero.estado == "activo") {
-                    Marker(
-                        state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
-                        title = paradero.nombre,
-                        snippet = paradero.direccion,
-                        // Pintamos el paradero de color verde para distinguirlo en la interfaz
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                // Barra de búsqueda
+                Column(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.92f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    OutlinedTextField(
+                        value = textoBusqueda,
+                        onValueChange = { textoBusqueda = it },
+                        label = { Text("¿A dónde vas?") },
+                        modifier = Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.95f), RoundedCornerShape(12.dp)),
+                        singleLine = true,
+                        trailingIcon = { TextButton(onClick = { textoBusqueda = "" }) { Text("🔍") } }
                     )
                 }
-            }
 
-// 4. DIBUJAMOS TODOS LOS BUSES ACTIVOS SIMULTÁNEAMENTE
-            busesEnZona.forEach { (idBus, destino) ->
-                key(idBus) {
-                    // --- NUEVO SPRINT 9: CÁLCULO DE ETA EN TIEMPO REAL ---
-                    val eta = if (ubicacionPasajero != null) {
-                        // Medimos la distancia entre el pasajero y este bus específico
-                        val distancia = calcularDistanciaMetros(ubicacionPasajero!!, destino)
-                        obtenerTextoETA(distancia)
-                    } else {
-                        "Calculando..."
-                    }
-
-                    MarcadorBusAnimado(
-                        idBus = idBus,
-                        destinoLatLng = destino,
-                        icono = iconoBus,
-                        textoEta = eta // Le inyectamos el tiempo estimado al marcador
-                    )
+                // --- BOTÓN SOS DE TU AMIGO ---
+                FloatingActionButton(
+                    onClick = { mostrarDialogoPanico = true },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 96.dp, end = 16.dp),
+                    containerColor = Color.Red
+                ) {
+                    Text("SOS", color = Color.White)
                 }
-            }
 
-        }
-
-// 2. EL BUSCADOR Y EL RADAR (TopCenter)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-                .fillMaxWidth(0.9f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Barra de Búsqueda
-            OutlinedTextField(
-                value = textoBusqueda,
-                onValueChange = { textoBusqueda = it },
-                label = { Text("¿A dónde vas?") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp)),
-                singleLine = true,
-                trailingIcon = {
-                    TextButton(
-                        onClick = {
-                            if (textoBusqueda.isNotEmpty()) {
-                                // 1. Conexión a Firebase para Historial
-                                val database = FirebaseDatabase.getInstance()
-                                val refHistorial = database.getReference("historial_busquedas")
-                                val uid = auth.currentUser?.uid ?: ""
-
-                                // 2. Armar paquete de captura silenciosa
-                                val nuevaBusqueda = HistorialBusquedaOficial(
-                                    id_usuario = uid,
-                                    destino_buscado = textoBusqueda,
-                                    rutas_resultado = emptyMap(), // Queda vacío por ahora hasta el motor de búsqueda final
-                                    fecha_busqueda = System.currentTimeMillis()
-                                )
-
-                                // 3. Guardar en BD y limpiar buscador
-                                refHistorial.push().setValue(nuevaBusqueda)
-                                Toast.makeText(context, "Buscando rutas hacia: $textoBusqueda", Toast.LENGTH_SHORT).show()
-                                textoBusqueda = ""
-                            }
+                if (mostrarDialogoPanico) {
+                    AlertDialog(
+                        onDismissRequest = { mostrarDialogoPanico = false },
+                        title = { Text("⚠️ ALERTA DE PÁNICO") },
+                        text = { Text("¿Estás seguro de enviar una alerta de pánico prioritaria?") },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        try {
+                                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                                com.ranger.popabus.network.IncidenciaRespuesta(
+                                                    id_usuario = "anonimo",
+                                                    descripcion = "PÁNICO PASAJERO",
+                                                    estado = "urgente",
+                                                    fecha_reporte = System.currentTimeMillis(),
+                                                    latitud = ubicacionPasajero?.latitude ?: popayan.latitude,
+                                                    longitud = ubicacionPasajero?.longitude ?: popayan.longitude
+                                                )
+                                            )
+                                            if (respuesta.isSuccessful) {
+                                                Toast.makeText(context, "🚨 Alerta de pánico enviada", Toast.LENGTH_LONG).show()
+                                                mostrarDialogoPanico = false
+                                            }
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) { Text("Enviar Alerta") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { mostrarDialogoPanico = false }) { Text("Cancelar") }
                         }
-                    ) {
-                        Text("🔍 Buscar")
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // El Radar original (ahora debajo del buscador)
-            Text(
-                text = "Buses en radar: ${busesEnZona.size}",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.Red,
-                modifier = Modifier
-                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-        // --- NUEVO SPRINT 4: INTERRUPTOR FLOTANTE PARA OCULTAR RUTAS ---
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Ver Rutas", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = mostrarRutas,
-                onCheckedChange = { mostrarRutas = it }
-            )
-        }
-        // LÓGICA DEL DIÁLOGO DE INCIDENCIAS
-        if (mostrarDialogoIncidencia) {
-            DialogoReportarIncidencia(
-                onDismiss = { mostrarDialogoIncidencia = false },
-                onEnviar = { descripcion ->
-                    val database = FirebaseDatabase.getInstance()
-                    val refIncidencias = database.getReference("incidencias")
-                    // Extraemos el UID si está logueado, sino va vacío (para anónimos)
-                    val uid = auth.currentUser?.uid ?: ""
-
-                    val nuevaIncidencia = IncidenciaOficial(
-                        id_usuario = uid,
-                        descripcion = descripcion,
-                        estado = "pendiente",
-                        fecha_reporte = System.currentTimeMillis()
                     )
-
-                    refIncidencias.push().setValue(nuevaIncidencia).addOnSuccessListener {
-                        Toast.makeText(context, "Incidencia reportada. ¡Gracias!", Toast.LENGTH_SHORT).show()
-                        mostrarDialogoIncidencia = false
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al enviar reporte", Toast.LENGTH_SHORT).show()
-                    }
                 }
-            )
-        }
 
-// LÓGICA DEL DIÁLOGO DE INCIDENCIAS
-        if (mostrarDialogoIncidencia) {
-            DialogoReportarIncidencia(
-                onDismiss = { mostrarDialogoIncidencia = false },
-                onEnviar = { descripcion ->
-                    val database = FirebaseDatabase.getInstance()
-                    val refIncidencias = database.getReference("incidencias")
-                    val uid = auth.currentUser?.uid ?: ""
+                // --- BOTÓN DE ABORDAJE DE TU AMIGO ---
+                Button(
+                    onClick = {
+                        rastreandoAbordaje = !rastreandoAbordaje
+                        val intentRastreo = Intent(context, ServicioRastreoPasajero::class.java)
+                        if (rastreandoAbordaje) ContextCompat.startForegroundService(context, intentRastreo)
+                        else context.stopService(intentRastreo)
+                    },
+                    modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 32.dp, start = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray)
+                ) {
+                    Text(if (rastreandoAbordaje) "⏹️ Detener Búsqueda" else "✅ Registrar Abordaje")
+                }
 
-                    // Extraemos la ubicación del pasajero (o usamos Popayán por defecto si falla)
-                    val lat = ubicacionPasajero?.latitude ?: popayan.latitude
-                    val lng = ubicacionPasajero?.longitude ?: popayan.longitude
+                // Botón de Cerrar Sesión
+                Button(
+                    onClick = onCerrarSesion,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Cerrar Sesión")
+                }
 
-                    val nuevaIncidencia = IncidenciaOficial(
-                        id_usuario = uid,
-                        descripcion = descripcion,
-                        estado = "pendiente",
-                        fecha_reporte = System.currentTimeMillis(),
-                        latitud = lat, // Guardamos la coordenada en Firebase
-                        longitud = lng
+                // Vistas de ayuda
+                if (vistaAyudaActual == "ACERCA") {
+                    AlertDialog(onDismissRequest = { vistaAyudaActual = null }, title = { Text("Acerca de POPABUS") }, text = { Text("Plataforma de movilidad para Popayán.") }, confirmButton = { TextButton(onClick = { vistaAyudaActual = null }) { Text("Cerrar") } })
+                } else if (vistaAyudaActual == "PREGUNTAS") {
+                    AlertDialog(onDismissRequest = { vistaAyudaActual = null }, title = { Text("Preguntas Frecuentes") }, text = { Text("Usa la barra superior para buscar rutas o reportar problemas.") }, confirmButton = { TextButton(onClick = { vistaAyudaActual = null }) { Text("Cerrar") } })
+                } else if (vistaAyudaActual == "SUGERENCIAS") {
+                    var sugerencia by remember { mutableStateOf("") }
+                    AlertDialog(
+                        onDismissRequest = { vistaAyudaActual = null },
+                        title = { Text("Buzón de Sugerencias") },
+                        text = { OutlinedTextField(value = sugerencia, onValueChange = { sugerencia = it }, label = { Text("Tu sugerencia...") }) },
+                        confirmButton = { Button(onClick = { Toast.makeText(context, "Enviado (Simulado)", Toast.LENGTH_SHORT).show(); vistaAyudaActual = null }) { Text("Enviar") } }
                     )
-
-                    refIncidencias.push().setValue(nuevaIncidencia).addOnSuccessListener {
-                        Toast.makeText(context, "Incidencia reportada. ¡Gracias!", Toast.LENGTH_SHORT).show()
-                        mostrarDialogoIncidencia = false
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al enviar reporte", Toast.LENGTH_SHORT).show()
-                    }
                 }
-            )
-        }
-
-        // --- NUEVO SPRINT 8: RESTRICCIÓN PARA INVITADOS ---
-        // El botón de reportar solo aparece si hay un usuario autenticado
-        if (auth.currentUser != null) {
-            Button(
-                onClick = { mostrarDialogoIncidencia = true },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 32.dp, end = 16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500))
-            ) {
-                Text("⚠️ Reportar")
             }
         }
-
-        // 3. El Botón de salida dinámico
-        Button(
-            onClick = onCerrarSesion,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-        ) {
-            Text(if (auth.currentUser != null) "Cerrar Sesión" else "Salir del Mapa")
-        }
-    } // Fin del Box
-} // Fin de la función MapaPopabus
+    }
+}
 
 
 @Composable
 fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
-    // Memoria interna para navegar dentro del panel de admin sin tocar el MainActivity
-    var subPantalla by remember { mutableStateOf("MENU") }
+    var subPantalla by rememberSaveable { mutableStateOf("MENU") }
 
     when (subPantalla) {
         "MENU" -> {
@@ -1401,13 +1256,11 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                 Text("Panel de Administración", style = MaterialTheme.typography.headlineMedium)
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // --- NUEVO SPRINT 11: BOTÓN DE GESTIÓN HUMANA ---
                 Button(onClick = { subPantalla = "USUARIOS" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
                     Text("👥 Gestión Humana")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Al hacer clic, cambiamos a la pantalla de paraderos
                 Button(onClick = { subPantalla = "PARADEROS" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
                     Text("🚌 Gestionar Paraderos")
                 }
@@ -1420,6 +1273,17 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
 
                 Button(onClick = { subPantalla = "BUSES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
                     Text("🚐 Gestionar Buses")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- NUEVOS BOTONES DE TU AMIGO ---
+                Button(onClick = { subPantalla = "REPORTES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("📊 Buzón de Reportes")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(onClick = { subPantalla = "INFORMES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("📈 Gestión de Informes")
                 }
                 Spacer(modifier = Modifier.height(48.dp))
 
@@ -1435,7 +1299,10 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
         "RUTAS" -> PantallaGestionRutas(onVolver = { subPantalla = "MENU" })
         "BUSES" -> PantallaGestionBuses(onVolver = { subPantalla = "MENU" })
 
-        // --- NUEVO SPRINT 11: RUTA A GESTIÓN DE USUARIOS ---
+        // --- NUEVAS RUTAS ---
+        "REPORTES" -> PantallaGestionReportes(onVolver = { subPantalla = "MENU" })
+        "INFORMES" -> PantallaGestionInformes(onVolver = { subPantalla = "MENU" })
+
         "USUARIOS" -> PantallaGestionUsuarios(onVolver = { subPantalla = "MENU" })
     }
 }
@@ -1854,31 +1721,28 @@ fun DialogoReportarIncidencia(onDismiss: () -> Unit, onEnviar: (String) -> Unit)
 @Composable
 fun PantallaGestionUsuarios(onVolver: () -> Unit) {
     val context = LocalContext.current
-    val database = remember { FirebaseDatabase.getInstance() }
-    val refUsuarios = database.getReference("usuarios")
+    val scope = rememberCoroutineScope()
 
-    // Estado para la lista de usuarios en tiempo real
-    var listaUsuarios by remember { mutableStateOf<List<UsuarioOficial>>(emptyList()) }
+    var listaUsuarios by remember { mutableStateOf<List<com.ranger.popabus.network.UsuarioRespuesta>>(emptyList()) }
+    var cargando by remember { mutableStateOf(true) }
 
-    // Descargamos los usuarios de Firebase en tiempo real
-    DisposableEffect(Unit) {
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val usuarios = mutableListOf<UsuarioOficial>()
-                for (hijo in snapshot.children) {
-                    val u = hijo.getValue(UsuarioOficial::class.java)
-                    if (u != null) {
-                        usuarios.add(u.copy(id = hijo.key ?: ""))
-                    }
+    fun recargarUsuarios() {
+        scope.launch {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarUsuarios()
+                if (respuesta.isSuccessful) {
+                    listaUsuarios = respuesta.body() ?: emptyList()
                 }
-                listaUsuarios = usuarios
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                cargando = false
+            } catch (e: Exception) {
+                Log.e("UsuariosAdmin", "Error listando usuarios: ${e.message}")
+                cargando = false
             }
         }
-        refUsuarios.addValueEventListener(listener)
-        onDispose { refUsuarios.removeEventListener(listener) }
+    }
+
+    LaunchedEffect(Unit) {
+        recargarUsuarios()
     }
 
     Column(
@@ -1888,61 +1752,80 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
         Text("Gestión Humana", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Usuarios Registrados: ${listaUsuarios.size}", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
+        if (cargando) {
+            CircularProgressIndicator()
+        } else {
+            Text("Usuarios Registrados: ${listaUsuarios.size}", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual con BOTONES DE EDICIÓN
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(listaUsuarios) { usuario ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("👤 ${usuario.nombre_completo}", style = MaterialTheme.typography.titleMedium)
-                        Text("Rol: ${usuario.rol.uppercase()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}", style = MaterialTheme.typography.bodySmall)
-                        Text("UID: ${usuario.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                items(listaUsuarios) { usuario ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("👤 ${usuario.nombre_completo}", style = MaterialTheme.typography.titleMedium)
+                            Text("📧 ${usuario.correo}", style = MaterialTheme.typography.bodySmall)
+                            Text("Rol: ${usuario.rol.uppercase()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                            Text("Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}", style = MaterialTheme.typography.bodySmall)
+                            Text("UID: ${usuario.uid}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                        // --- NUEVOS BOTONES DE ACCIÓN (UPDATE) ---
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // 1. Botón para Suspender / Activar
-                            OutlinedButton(
-                                onClick = {
-                                    val nuevoEstado = !usuario.activo // Invertimos el estado actual
-                                    refUsuarios.child(usuario.id).child("activo").setValue(nuevoEstado)
-                                        .addOnSuccessListener {
-                                            val msj = if (nuevoEstado) "Cuenta Activada" else "Cuenta Suspendida"
-                                            Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
-                                        }
-                                }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(if (usuario.activo) "🔴 Suspender" else "🟢 Activar")
-                            }
-
-                            // 2. Botón para Cambiar Rol
-                            OutlinedButton(
-                                onClick = {
-                                    // 🛑 REGLA DE SEGURIDAD CORPORATIVA: No se toca a los administradores
-                                    if (usuario.rol.lowercase() == "administrador") {
-                                        Toast.makeText(context, "SEGURIDAD: Los administradores solo se gestionan desde la consola web", Toast.LENGTH_LONG).show()
-                                    } else {
-                                        // ✅ Ciclo seguro: solo alterna entre pasajero y conductor
-                                        val nuevoRol = if (usuario.rol.lowercase() == "pasajero") "conductor" else "pasajero"
-
-                                        refUsuarios.child(usuario.id).child("rol").setValue(nuevoRol)
-                                            .addOnSuccessListener {
-                                                Toast.makeText(context, "Rol cambiado a $nuevoRol", Toast.LENGTH_SHORT).show()
+                                // 1. Botón para Suspender / Activar
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            try {
+                                                val nuevoEstado = !usuario.activo
+                                                val resp = com.ranger.popabus.network.RetrofitClient.apiService.cambiarEstadoUsuario(
+                                                    usuario.uid,
+                                                    mapOf("activo" to nuevoEstado)
+                                                )
+                                                if (resp.isSuccessful) {
+                                                    Toast.makeText(context, if (nuevoEstado) "Cuenta Activada" else "Cuenta Suspendida", Toast.LENGTH_SHORT).show()
+                                                    recargarUsuarios()
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
                                             }
+                                        }
                                     }
+                                ) {
+                                    Text(if (usuario.activo) "🔴 Suspender" else "🟢 Activar")
                                 }
-                            ) {
-                                Text("🔄 Rol")
+
+                                // 2. Botón para Cambiar Rol
+                                OutlinedButton(
+                                    onClick = {
+                                        if (usuario.rol.lowercase() == "administrador") {
+                                            Toast.makeText(context, "SEGURIDAD: Los administradores no se cambian aquí", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            scope.launch {
+                                                try {
+                                                    val nuevoRol = if (usuario.rol.lowercase() == "pasajero") "conductor" else "pasajero"
+                                                    val resp = com.ranger.popabus.network.RetrofitClient.apiService.cambiarRolUsuario(
+                                                        usuario.uid,
+                                                        mapOf("rol" to nuevoRol)
+                                                    )
+                                                    if (resp.isSuccessful) {
+                                                        Toast.makeText(context, "Rol cambiado a $nuevoRol", Toast.LENGTH_SHORT).show()
+                                                        recargarUsuarios()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text("🔄 Rol")
+                                }
                             }
                         }
                     }
@@ -1952,6 +1835,130 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
+@Composable
+fun PantallaGestionReportes(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var listaIncidencias by remember { mutableStateOf<List<com.ranger.popabus.network.IncidenciaRespuesta>>(emptyList()) }
+
+    // Estado de las pestañas
+    var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = listOf("Pasajeros", "Conductores")
+
+    fun recargarIncidencias() {
+        scope.launch {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarIncidencias()
+                if (respuesta.isSuccessful) {
+                    listaIncidencias = respuesta.body() ?: emptyList()
+                }
+            } catch (e: Exception) {
+                Log.e("ReportesAdmin", "Error: ${e.message}")
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        recargarIncidencias()
+    }
+
+    // --- FILTRO MATEMÁTICO DE MATRIZ OPERATIVA ---
+    val palabrasConductor = listOf("trancón", "desvío", "fallo", "pánico conductor")
+
+    val incidenciasFiltradas = listaIncidencias.filter { incidencia ->
+        val descNormalizada = incidencia.descripcion.lowercase()
+        val esDeConductor = palabrasConductor.any { keyword -> descNormalizada.contains(keyword) }
+
+        if (tabIndex == 0) {
+            !esDeConductor // Pestaña Pasajeros (SOS y sugerencias)
+        } else {
+            esDeConductor // Pestaña Conductores
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Reportes e Incidencias", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        androidx.compose.material3.TabRow(selectedTabIndex = tabIndex) {
+            tabs.forEachIndexed { index, title ->
+                androidx.compose.material3.Tab(
+                    selected = tabIndex == index,
+                    onClick = { tabIndex = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (incidenciasFiltradas.isEmpty()) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text("No hay reportes en esta categoría", color = Color.Gray)
+            }
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                items(incidenciasFiltradas) { incidencia ->
+                    val esUrgente = incidencia.estado.lowercase() == "urgente"
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (esUrgente) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        border = if (esUrgente) androidx.compose.foundation.BorderStroke(1.dp, Color.Red) else null
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = if (esUrgente) "🚨 ALERTA: ${incidencia.estado.uppercase()}" else "📋 Reporte Normal",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (esUrgente) Color.Red else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = incidencia.descripcion, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val fecha = remember(incidencia.fecha_reporte) {
+                                val sdf = java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
+                                sdf.format(java.util.Date(incidencia.fecha_reporte))
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = "📅 $fecha", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text(text = "Usuario: ${incidencia.id_usuario.take(8)}...", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+            Text("Volver al Menú")
+        }
+    }
+}
+@Composable
+fun PantallaGestionInformes(onVolver: () -> Unit) {
+    // Pantalla de ejemplo, tu amigo la tenía conectada a Firebase,
+    // aquí podemos dejarla lista para conectar a PostgreSQL después.
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Gestión de Informes", style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Próximamente: Análisis de tiempos y alertas de conductores.", color = Color.Gray)
+        Spacer(modifier = Modifier.height(32.dp))
         Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
             Text("Volver al Menú")
         }

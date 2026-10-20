@@ -53,7 +53,17 @@ object Paraderos : Table("paraderos") {
 
     override val primaryKey = PrimaryKey(id)
 }
+object Incidencias : Table("incidencias") {
+    val id = varchar("id", 100)
+    val id_usuario = varchar("id_usuario", 100)
+    val descripcion = varchar("descripcion", 500)
+    val estado = varchar("estado", 50).default("pendiente")
+    val fecha_reporte = long("fecha_reporte")
+    val latitud = double("latitud").default(0.0)
+    val longitud = double("longitud").default(0.0)
 
+    override val primaryKey = PrimaryKey(id)
+}
 // --- CONEXIÓN E INICIALIZACIÓN ---
 
 fun initDatabase() {
@@ -71,7 +81,7 @@ fun initDatabase() {
     )
 
     transaction {
-        SchemaUtils.create(Usuarios, Buses, Ubicaciones,Paraderos)
+        SchemaUtils.create(Usuarios, Buses, Ubicaciones,Paraderos,Incidencias)
 
     }
 

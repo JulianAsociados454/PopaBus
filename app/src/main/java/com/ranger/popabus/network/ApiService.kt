@@ -6,6 +6,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.PUT
 
 data class MensajeRespuesta(
     val status: String,
@@ -90,6 +91,23 @@ data class ParaderoRespuesta(
     val geohash: String = "",
     val estado: String = "activo"
 )
+data class UsuarioRespuesta(
+    val uid: String,
+    val correo: String,
+    val nombre_completo: String,
+    val rol: String,
+    val activo: Boolean,
+    val fecha_registro: Long
+)
+data class IncidenciaRespuesta(
+    val id: String = "",
+    val id_usuario: String,
+    val descripcion: String,
+    val estado: String = "pendiente",
+    val fecha_reporte: Long,
+    val latitud: Double = 0.0,
+    val longitud: Double = 0.0
+)
 
 interface ApiService {
     @GET("/")
@@ -122,5 +140,18 @@ interface ApiService {
 
     @DELETE("/api/paraderos/{id}")
     suspend fun eliminarParadero(@Path("id") id: String): Response<Map<String, String>>
+    @GET("/api/usuarios")
+    suspend fun listarUsuarios(): Response<List<UsuarioRespuesta>>
 
+    @PUT("/api/usuarios/{uid}/activo")
+    suspend fun cambiarEstadoUsuario(@Path("uid") uid: String, @Body request: Map<String, Boolean>): Response<Map<String, String>>
+
+    @PUT("/api/usuarios/{uid}/rol")
+    suspend fun cambiarRolUsuario(@Path("uid") uid: String, @Body request: Map<String, String>): Response<Map<String, String>>
+
+    @GET("/api/incidencias")
+    suspend fun listarIncidencias(): Response<List<IncidenciaRespuesta>>
+
+    @POST("/api/incidencias")
+    suspend fun crearIncidencia(@Body incidencia: IncidenciaRespuesta): Response<Map<String, String>>
 }

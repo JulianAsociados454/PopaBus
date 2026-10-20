@@ -119,6 +119,25 @@ data class ParaderoRespuesta(
     val geohash: String = "",
     val estado: String = "activo"
 )
+@Serializable
+data class UsuarioRespuesta(
+    val uid: String,
+    val correo: String,
+    val nombre_completo: String,
+    val rol: String,
+    val activo: Boolean,
+    val fecha_registro: Long
+)
+@Serializable
+data class IncidenciaRespuesta(
+    val id: String = "",
+    val id_usuario: String,
+    val descripcion: String,
+    val estado: String = "pendiente",
+    val fecha_reporte: Long,
+    val latitud: Double = 0.0,
+    val longitud: Double = 0.0
+)
 
 // --- SEED: Crear los usuarios de prueba al arrancar ---
 fun seedUsuarios() {
@@ -468,6 +487,86 @@ fun Application.configureRouting() {
             val eliminado = transaction { Paraderos.deleteWhere { Paraderos.id eq id } }
             if (eliminado > 0) call.respond(mapOf("status" to "ok"))
             else call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
+        }
+        // --- ENDPOINTS DE USUARIOS (GESTIÓN HUMANA) ---
+        get("/api/usuarios") {
+            val lista = transaction {
+                Usuarios.selectAll().map { fila ->
+                    UsuarioRespuesta(
+                        uid = fila[Usuarios.uid],
+                        correo = fila[Usuarios.correo],
+                        nombre_completo = fila[Usuarios.nombreCompleto],
+                        rol = fila[Usuarios.rol],
+                        activo = fila[Usuarios.activo],
+                        fecha_registro = fila[Usuarios.fechaRegistro].toEpochMilli()
+                    )
+                }
+            }
+            call.respond(lista)
+        }
+
+        put("/api/usuarios/{uid}/activo") {
+            val uid = call.parameters["uid"] ?: ""
+            val request = call.receive<Map<String, Boolean>>()
+            val nuevoEstado = request["activo"] ?: true
+
+            val actualizado = transaction {
+                Usuarios.update({ Usuarios.uid eq uid }) {
+                    it[activo] = nuevoEstado
+                }
+            }
+            if (actualizado > 0) call.respond(mapOf("status" to "ok"))
+            else call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
+        }
+
+        put("/api/usuarios/{uid}/rol") {
+            val uid = call.parameters["uid"] ?: ""
+            val request = call.receive<Map<String, String>>()
+            val nuevoRol = request["rol"] ?: "pasajero"
+
+            val actualizado = transaction {
+                Usuarios.update({ Usuarios.uid eq uid }) {
+                    it[rol] = nuevoRol
+                }
+            }
+            if (actualizado > 0) call.respond(mapOf("status" to "ok"))
+            else call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
+        }
+        // --- ENDPOINTS DE INCIDENCIAS ---
+        get("/api/incidencias") {
+            val lista = transaction {
+                Incidencias.selectAll().map { fila ->
+                    IncidenciaRespuesta(
+                        id = fila[Incidencias.id],
+                        id_usuario = fila[Incidencias.id_usuario],
+                        descripcion = fila[Incidencias.descripcion],
+                        estado = fila[Incidencias.estado],
+                        fecha_reporte = fila[Incidencias.fecha_reporte],
+                        latitud = fila[Incidencias.latitud],
+                        longitud = fila[Incidencias.longitud]
+                    )
+                }.sortedByDescending { it.fecha_reporte }
+            }
+            call.respond(lista)
+        }
+
+        post("/api/incidencias") {
+            val request = call.receive<IncidenciaRespuesta>()
+            val nuevoId = "inc_${System.currentTimeMillis()}"
+
+            transaction {
+                Incidencias.insert {
+                    it[id] = nuevoId
+                    it[id_usuario] = request.id_usuario
+                    it[descripcion] = request.descripcion
+                    it[estado] = request.estado
+                    it[fecha_reporte] = request.fecha_reporte
+                    it[latitud] = request.latitud
+                    it[longitud] = request.longitud
+                }
+            }
+            println("⚠️ Incidencia creada: ${request.descripcion}")
+            call.respond(HttpStatusCode.Created, mapOf("status" to "ok", "id" to nuevoId))
         }
     }
 }
