@@ -108,6 +108,15 @@ data class IncidenciaRespuesta(
     val latitud: Double = 0.0,
     val longitud: Double = 0.0
 )
+data class RutaRespuesta(
+    val id: String = "",
+    val nombre_ruta: String,
+    val origen: String,
+    val destino: String,
+    val estado: String = "activa",
+    val geometria: String = "[]"
+)
+
 
 interface ApiService {
     @GET("/")
@@ -154,4 +163,7 @@ interface ApiService {
 
     @POST("/api/incidencias")
     suspend fun crearIncidencia(@Body incidencia: IncidenciaRespuesta): Response<Map<String, String>>
+    @GET("/api/rutas")
+    suspend fun listarRutas(): Response<List<RutaRespuesta>>
+
 }

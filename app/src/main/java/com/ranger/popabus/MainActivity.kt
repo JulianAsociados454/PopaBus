@@ -99,7 +99,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.runtime.saveable.rememberSaveable
-
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
     val latitud: Double = 0.0,
@@ -1002,10 +1003,11 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
-    // Estado para las alertas (pines naranjas)
     var incidenciasActivas by remember { mutableStateOf<List<com.ranger.popabus.network.IncidenciaRespuesta>>(emptyList()) }
+    var rutasOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.RutaRespuesta>>(emptyList()) }
+    var paraderosOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.ParaderoRespuesta>>(emptyList()) }
+    var mostrarRutas by remember { mutableStateOf(true) }
 
-    // --- VARIABLES DE TU AMIGO (Menú y SOS) ---
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
     var rastreandoAbordaje by remember { mutableStateOf(false) }
@@ -1044,39 +1046,60 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    // --- MOTOR 1: Busca los buses en PostgreSQL ---
+    // --- MOTOR 1: Buses ---
     LaunchedEffect(Unit) {
         while (true) {
             try {
                 val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusesActivos()
                 if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
-                    val listaBuses = respuesta.body()!!.buses
                     val mapa = mutableMapOf<String, LatLng>()
-                    for (bus in listaBuses) {
+                    for (bus in respuesta.body()!!.buses) {
                         mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
                     }
                     busesEnZona = mapa
                 }
-            } catch (e: Exception) {
-                Log.e("PasajeroBackend", "Error buses: ${e.message}")
-            }
+            } catch (e: Exception) {}
             delay(3000)
         }
     }
 
-    // --- MOTOR 2: Busca las alertas (Incidencias) en PostgreSQL ---
+    // --- MOTOR 2: Alertas ---
     LaunchedEffect(Unit) {
         while (true) {
             try {
                 val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarIncidencias()
                 if (respuesta.isSuccessful) {
-                    // Filtramos para que solo muestre las que tienen coordenadas
                     incidenciasActivas = respuesta.body()?.filter { it.latitud != 0.0 } ?: emptyList()
                 }
+            } catch (e: Exception) {}
+            delay(5000)
+        }
+    }
+
+    // --- MOTOR 3: Rutas y Paraderos ---
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val respRutas = com.ranger.popabus.network.RetrofitClient.apiService.listarRutas()
+                if (respRutas.isSuccessful) rutasOficiales = respRutas.body() ?: emptyList()
+
+                val respParaderos = com.ranger.popabus.network.RetrofitClient.apiService.listarParaderos()
+                if (respParaderos.isSuccessful) paraderosOficiales = respParaderos.body() ?: emptyList()
+            } catch (e: Exception) {}
+            delay(10000)
+        }
+    }
+
+    // ⚠️ AQUÍ ESTÁ LA MAGIA: Convertimos el JSON a coordenadas ANTES de dibujar
+    val puntosRutas = remember(rutasOficiales) {
+        rutasOficiales.filter { it.estado == "activa" && it.geometria.isNotEmpty() }.mapNotNull { ruta ->
+            try {
+                val type = object : com.google.gson.reflect.TypeToken<List<CoordenadaRuta>>() {}.type
+                val puntos: List<CoordenadaRuta> = com.google.gson.Gson().fromJson(ruta.geometria, type)
+                puntos.map { LatLng(it.latitud, it.longitud) }
             } catch (e: Exception) {
-                Log.e("PasajeroBackend", "Error alertas: ${e.message}")
+                null // Si una ruta está mal formada, la ignoramos
             }
-            delay(5000) // Consulta cada 5 segundos
         }
     }
 
@@ -1116,7 +1139,32 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     cameraPositionState = cameraPositionState,
                     properties = mapProperties
                 ) {
-                    // Dibujar Buses
+                    // 1. RUTAS (Usando la lista pre-procesada)
+                    if (mostrarRutas) {
+                        puntosRutas.forEach { puntosLatLng ->
+                            if (puntosLatLng.isNotEmpty()) {
+                                com.google.maps.android.compose.Polyline(
+                                    points = puntosLatLng,
+                                    color = Color.Red,
+                                    width = 15f
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. PARADEROS
+                    paraderosOficiales.forEach { paradero ->
+                        if (paradero.estado == "activo") {
+                            Marker(
+                                state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
+                                title = paradero.nombre,
+                                snippet = paradero.direccion,
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                            )
+                        }
+                    }
+
+                    // 3. BUSES
                     busesEnZona.forEach { (idBus, destino) ->
                         key(idBus) {
                             val eta = if (ubicacionPasajero != null) {
@@ -1126,7 +1174,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         }
                     }
 
-                    // Dibujar Alertas (Pines Naranjas)
+                    // 4. ALERTAS
                     incidenciasActivas.forEach { incidencia ->
                         Marker(
                             state = MarkerState(position = LatLng(incidencia.latitud, incidencia.longitud)),
@@ -1137,7 +1185,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     }
                 }
 
-                // Barra de búsqueda
+                // Barra de búsqueda y Switch
                 Column(
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.92f),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -1150,9 +1198,25 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         singleLine = true,
                         trailingIcon = { TextButton(onClick = { textoBusqueda = "" }) { Text("🔍") } }
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🗺️ Ver Rutas", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = mostrarRutas,
+                            onCheckedChange = { mostrarRutas = it }
+                        )
+                    }
                 }
 
-                // --- BOTÓN SOS DE TU AMIGO ---
+                // --- BOTÓN SOS ---
                 FloatingActionButton(
                     onClick = { mostrarDialogoPanico = true },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 96.dp, end = 16.dp),
@@ -1199,7 +1263,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     )
                 }
 
-                // --- BOTÓN DE ABORDAJE DE TU AMIGO ---
+                // --- BOTÓN DE ABORDAJE ---
                 Button(
                     onClick = {
                         rastreandoAbordaje = !rastreandoAbordaje
@@ -1285,6 +1349,12 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                 Button(onClick = { subPantalla = "INFORMES" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
                     Text("📈 Gestión de Informes")
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- ESTE ES EL BOTÓN QUE FALTABA ---
+                Button(onClick = { subPantalla = "TORRE_CONTROL" }, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+                    Text("📡 Torre de Control (Mapa)")
+                }
                 Spacer(modifier = Modifier.height(48.dp))
 
                 Button(
@@ -1298,12 +1368,12 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
         "PARADEROS" -> PantallaGestionParaderos(onVolver = { subPantalla = "MENU" })
         "RUTAS" -> PantallaGestionRutas(onVolver = { subPantalla = "MENU" })
         "BUSES" -> PantallaGestionBuses(onVolver = { subPantalla = "MENU" })
-
-        // --- NUEVAS RUTAS ---
         "REPORTES" -> PantallaGestionReportes(onVolver = { subPantalla = "MENU" })
         "INFORMES" -> PantallaGestionInformes(onVolver = { subPantalla = "MENU" })
-
         "USUARIOS" -> PantallaGestionUsuarios(onVolver = { subPantalla = "MENU" })
+
+        // --- ESTA ES LA RUTA QUE FALTABA ---
+        "TORRE_CONTROL" -> MapaGeneralAdmin(onVolver = { subPantalla = "MENU" })
     }
 }
 @Composable
@@ -1963,4 +2033,93 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
             Text("Volver al Menú")
         }
     }
+}
+@Composable
+fun MapaGeneralAdmin(onVolver: () -> Unit) {
+    val context = LocalContext.current
+
+    // Ahora guardamos la lista completa de buses (con su timestamp) desde PostgreSQL
+    var flotaActiva by remember { mutableStateOf<List<com.ranger.popabus.network.BusActivo>>(emptyList()) }
+
+    // Timer para forzar la actualización de los colores (gris/verde) cada 5 segundos
+    var tiempoActual by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(5000)
+            tiempoActual = System.currentTimeMillis()
+        }
+    }
+
+    // --- MOTOR: Lee la flota desde PostgreSQL ---
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusesActivos()
+                if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                    flotaActiva = respuesta.body()!!.buses
+                }
+            } catch (e: Exception) {
+                Log.e("TorreControl", "Error conectando con la flota: ${e.message}")
+            }
+            kotlinx.coroutines.delay(3000)
+        }
+    }
+
+    val popayan = LatLng(2.4419, -76.6063)
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(popayan, 13f)
+    }
+
+    val iconoBusNormal = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
+    val iconoBusGris = remember { obtenerIconoBusGris(context, R.drawable.ic_bus) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(isMyLocationEnabled = false)
+        ) {
+            flotaActiva.forEach { bus ->
+                // Lógica de conectividad: Si el último timestamp es mayor a 2 minutos, está desconectado
+                val isDesconectado = (tiempoActual - bus.timestamp) > 120_000L
+
+                Marker(
+                    state = MarkerState(position = LatLng(bus.latitud, bus.longitud)),
+                    title = "Vehículo: ${bus.id_bus}",
+                    snippet = if (isDesconectado) "⚠️ Señal Perdida (+2 min)" else "🟢 Activo",
+                    icon = if (isDesconectado) iconoBusGris else iconoBusNormal
+                )
+            }
+        }
+
+        // Botón flotante para salir de la torre de control
+        androidx.compose.material3.FloatingActionButton(
+            onClick = onVolver,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp),
+            containerColor = Color.White
+        ) {
+            Text("⬅️")
+        }
+    }
+}
+fun obtenerIconoBusGris(context: Context, vectorResId: Int): BitmapDescriptor? {
+    MapsInitializer.initialize(context)
+    val vectorDrawable = ContextCompat.getDrawable(context, vectorResId) ?: return null
+    vectorDrawable.setBounds(0, 0, vectorDrawable.intrinsicWidth, vectorDrawable.intrinsicHeight)
+
+    val bitmap = Bitmap.createBitmap(vectorDrawable.intrinsicWidth, vectorDrawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val paint = android.graphics.Paint()
+    val matrix = android.graphics.ColorMatrix()
+    matrix.setSaturation(0f)
+    paint.colorFilter = android.graphics.ColorMatrixColorFilter(matrix)
+
+    canvas.saveLayer(null, paint)
+    vectorDrawable.draw(canvas)
+    canvas.restore()
+
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
