@@ -1,5 +1,6 @@
 package com.ranger.popabus
 import android.Manifest
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import android.annotation.SuppressLint
 import android.content.Context
@@ -101,6 +102,11 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.foundation.clickable
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
     val latitud: Double = 0.0,
@@ -1003,25 +1009,28 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
-    var incidenciasActivas by remember { mutableStateOf<List<com.ranger.popabus.network.IncidenciaRespuesta>>(emptyList()) }
+    // Estados de datos
+    var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
     var rutasOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.RutaRespuesta>>(emptyList()) }
     var paraderosOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.ParaderoRespuesta>>(emptyList()) }
-    var mostrarRutas by remember { mutableStateOf(true) }
+    val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
-    var rastreandoAbordaje by remember { mutableStateOf(false) }
-    var mostrarDialogoPanico by remember { mutableStateOf(false) }
+    // ESTADOS DE LA UI (Como en la foto)
+    var rutaSeleccionada by remember { mutableStateOf<com.ranger.popabus.network.RutaRespuesta?>(null) }
+    var textoBusqueda by remember { mutableStateOf("") }
+
+    // Estado del panel inferior (BottomSheet)
+    val scaffoldState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberStandardBottomSheetState(
+            initialValue = SheetValue.PartiallyExpanded,
+            skipHiddenState = false
+        )
+    )
 
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(popayan, 14f)
     }
-
-    var ubicacionPasajero by remember { mutableStateOf<LatLng?>(null) }
-    var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
-    val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
-    var textoBusqueda by remember { mutableStateOf("") }
 
     // Permisos
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -1032,7 +1041,6 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         val miUbicacion = LatLng(location.latitude, location.longitude)
-                        ubicacionPasajero = miUbicacion
                         coroutineScope.launch {
                             cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(miUbicacion, 16f), 2000)
                         }
@@ -1046,146 +1054,128 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    // --- MOTOR 1: Buses ---
+    // MOTOR DE DATOS (Buses, Rutas, Paraderos)
     LaunchedEffect(Unit) {
         while (true) {
             try {
-                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusesActivos()
-                if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                // Buses
+                val respBuses = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusesActivos()
+                if (respBuses.isSuccessful && respBuses.body()?.status == "ok") {
                     val mapa = mutableMapOf<String, LatLng>()
-                    for (bus in respuesta.body()!!.buses) {
-                        mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
-                    }
+                    for (bus in respBuses.body()!!.buses) mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
                     busesEnZona = mapa
                 }
-            } catch (e: Exception) {}
-            delay(3000)
-        }
-    }
-
-    // --- MOTOR 2: Alertas ---
-    LaunchedEffect(Unit) {
-        while (true) {
-            try {
-                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarIncidencias()
-                if (respuesta.isSuccessful) {
-                    incidenciasActivas = respuesta.body()?.filter { it.latitud != 0.0 } ?: emptyList()
-                }
-            } catch (e: Exception) {}
-            delay(5000)
-        }
-    }
-
-    // --- MOTOR 3: Rutas y Paraderos ---
-    LaunchedEffect(Unit) {
-        while (true) {
-            try {
+                // Rutas
                 val respRutas = com.ranger.popabus.network.RetrofitClient.apiService.listarRutas()
                 if (respRutas.isSuccessful) rutasOficiales = respRutas.body() ?: emptyList()
 
+                // Paraderos
                 val respParaderos = com.ranger.popabus.network.RetrofitClient.apiService.listarParaderos()
                 if (respParaderos.isSuccessful) paraderosOficiales = respParaderos.body() ?: emptyList()
-            } catch (e: Exception) {}
-            delay(10000)
+
+            } catch (e: Exception) {
+                Log.e("MapaBackend", "Error: ${e.message}")
+            }
+            delay(4000)
         }
     }
 
-    // ⚠️ AQUÍ ESTÁ LA MAGIA: Convertimos el JSON a coordenadas ANTES de dibujar
-    val puntosRutas = remember(rutasOficiales) {
-        rutasOficiales.filter { it.estado == "activa" && it.geometria.isNotEmpty() }.mapNotNull { ruta ->
+    // Convertir el texto JSON de la geometría a LatLng para dibujar la línea
+    val puntosRutaSeleccionada = remember(rutaSeleccionada) {
+        if (rutaSeleccionada != null && rutaSeleccionada!!.geometria.isNotEmpty()) {
             try {
                 val type = object : com.google.gson.reflect.TypeToken<List<CoordenadaRuta>>() {}.type
-                val puntos: List<CoordenadaRuta> = com.google.gson.Gson().fromJson(ruta.geometria, type)
+                val puntos: List<CoordenadaRuta> = com.google.gson.Gson().fromJson(rutaSeleccionada!!.geometria, type)
                 puntos.map { LatLng(it.latitud, it.longitud) }
-            } catch (e: Exception) {
-                null // Si una ruta está mal formada, la ignoramos
-            }
-        }
+            } catch (e: Exception) { emptyList() }
+        } else emptyList()
     }
 
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = drawerState.isOpen,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text("Ayuda", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
-                Spacer(modifier = Modifier.height(8.dp))
-                NavigationDrawerItem(label = { Text("Sugerencias") }, selected = false, onClick = { vistaAyudaActual = "SUGERENCIAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+    // --- DISEÑO TIPO GOOGLE MAPS ---
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = if (rutaSeleccionada != null) 180.dp else 0.dp, // Se oculta si no hay ruta
+        sheetContent = {
+            if (rutaSeleccionada != null) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(text = rutaSeleccionada!!.nombre_ruta, style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "De: ${rutaSeleccionada!!.origen} ➔ A: ${rutaSeleccionada!!.destino}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                Toast.makeText(context, "¡Buen viaje!", Toast.LENGTH_SHORT).show()
+                                rutaSeleccionada = null // Cierra el panel
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E8E3E)) // Verde de Google
+                        ) {
+                            Text("▶ Empezar")
+                        }
+                        OutlinedButton(
+                            onClick = { Toast.makeText(context, "Añadido a favoritos", Toast.LENGTH_SHORT).show() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("⭐ Favorito")
+                        }
+                    }
+                }
             }
         }
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { },
-                    navigationIcon = {
-                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Menú")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-            },
-            containerColor = Color.Transparent
-        ) { paddingValues ->
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+    ) { paddingValues ->
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-                GoogleMap(
-                    modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState,
-                    properties = mapProperties
-                ) {
-                    // 1. RUTAS (Usando la lista pre-procesada)
-                    if (mostrarRutas) {
-                        puntosRutas.forEach { puntosLatLng ->
-                            if (puntosLatLng.isNotEmpty()) {
-                                com.google.maps.android.compose.Polyline(
-                                    points = puntosLatLng,
-                                    color = Color.Red,
-                                    width = 15f
-                                )
-                            }
-                        }
-                    }
+            // 1. MAPA
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = mapProperties
+            ) {
+                // Dibujar la ruta seleccionada en ROJO
+                if (puntosRutaSeleccionada.isNotEmpty()) {
+                    com.google.maps.android.compose.Polyline(
+                        points = puntosRutaSeleccionada,
+                        color = Color.Red,
+                        width = 18f
+                    )
+                }
 
-                    // 2. PARADEROS
+                // Dibujar paraderos de la ruta
+                if (rutaSeleccionada != null) {
                     paraderosOficiales.forEach { paradero ->
-                        if (paradero.estado == "activo") {
-                            Marker(
-                                state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
-                                title = paradero.nombre,
-                                snippet = paradero.direccion,
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
-                            )
-                        }
-                    }
-
-                    // 3. BUSES
-                    busesEnZona.forEach { (idBus, destino) ->
-                        key(idBus) {
-                            val eta = if (ubicacionPasajero != null) {
-                                obtenerTextoETA(calcularDistanciaMetros(ubicacionPasajero!!, destino))
-                            } else "Calculando..."
-                            MarcadorBusAnimado(idBus, destino, iconoBus, eta)
-                        }
-                    }
-
-                    // 4. ALERTAS
-                    incidenciasActivas.forEach { incidencia ->
                         Marker(
-                            state = MarkerState(position = LatLng(incidencia.latitud, incidencia.longitud)),
-                            title = "⚠️ Alerta",
-                            snippet = incidencia.descripcion,
-                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                            state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
+                            title = paradero.nombre,
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
                         )
                     }
                 }
 
-                // Barra de búsqueda y Switch
+                // Dibujar buses
+                busesEnZona.forEach { (idBus, destino) ->
+                    key(idBus) {
+                        MarcadorBusAnimado(idBus, destino, iconoBus, "Buscando...")
+                    }
+                }
+            }
+
+            // 2. BARRA SUPERIOR (Si hay ruta seleccionada)
+            if (rutaSeleccionada != null) {
+                TopAppBar(
+                    title = { Text(rutaSeleccionada!!.nombre_ruta) },
+                    navigationIcon = {
+                        IconButton(onClick = { rutaSeleccionada = null }) {
+                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Volver")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White.copy(alpha = 0.9f))
+                )
+            } else {
+                // 3. BARRA DE BÚSQUEDA (Si no hay ruta seleccionada)
                 Column(
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.92f),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -1194,112 +1184,77 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         value = textoBusqueda,
                         onValueChange = { textoBusqueda = it },
                         label = { Text("¿A dónde vas?") },
-                        modifier = Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.95f), RoundedCornerShape(12.dp)),
-                        singleLine = true,
-                        trailingIcon = { TextButton(onClick = { textoBusqueda = "" }) { Text("🔍") } }
+                        modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)),
+                        singleLine = true
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    // Lista flotante de resultados
+                    if (textoBusqueda.isNotBlank()) {
+                        val rutasEncontradas = rutasOficiales.filter { it.nombre_ruta.contains(textoBusqueda, true) || it.origen.contains(textoBusqueda, true) || it.destino.contains(textoBusqueda, true) }
 
-                    Row(
-                        modifier = Modifier
-                            .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("🗺️ Ver Rutas", color = Color.Black, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = mostrarRutas,
-                            onCheckedChange = { mostrarRutas = it }
-                        )
+                        Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            LazyColumn {
+                                items(rutasEncontradas) { ruta ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            rutaSeleccionada = ruta
+                                            textoBusqueda = ""
+
+                                            // Zoom a la ruta
+                                            if (ruta.geometria.isNotEmpty()) {
+                                                try {
+                                                    val type = object : com.google.gson.reflect.TypeToken<List<CoordenadaRuta>>() {}.type
+                                                    val puntos: List<CoordenadaRuta> = com.google.gson.Gson().fromJson(ruta.geometria, type)
+                                                    if (puntos.isNotEmpty()) {
+                                                        coroutineScope.launch {
+                                                            cameraPositionState.animate(
+                                                                CameraUpdateFactory.newLatLngZoom(LatLng(puntos.first().latitud, puntos.first().longitud), 14f), 1500
+                                                            )
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {}
+                                            }
+                                        }.padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(ruta.nombre_ruta, style = MaterialTheme.typography.titleMedium)
+                                        Text("Ver 📍")
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+            }
 
-                // --- BOTÓN SOS ---
+            // 4. BOTONES FLOTANTES
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 FloatingActionButton(
-                    onClick = { mostrarDialogoPanico = true },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 96.dp, end = 16.dp),
-                    containerColor = Color.Red
+                    onClick = { },
+                    containerColor = Color(0xFF1E88E5),
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Text("SOS", color = Color.White)
+                    Text("🔗", color = Color.White)
                 }
-
-                if (mostrarDialogoPanico) {
-                    AlertDialog(
-                        onDismissRequest = { mostrarDialogoPanico = false },
-                        title = { Text("⚠️ ALERTA DE PÁNICO") },
-                        text = { Text("¿Estás seguro de enviar una alerta de pánico prioritaria?") },
-                        confirmButton = {
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        try {
-                                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
-                                                com.ranger.popabus.network.IncidenciaRespuesta(
-                                                    id_usuario = "anonimo",
-                                                    descripcion = "PÁNICO PASAJERO",
-                                                    estado = "urgente",
-                                                    fecha_reporte = System.currentTimeMillis(),
-                                                    latitud = ubicacionPasajero?.latitude ?: popayan.latitude,
-                                                    longitud = ubicacionPasajero?.longitude ?: popayan.longitude
-                                                )
-                                            )
-                                            if (respuesta.isSuccessful) {
-                                                Toast.makeText(context, "🚨 Alerta de pánico enviada", Toast.LENGTH_LONG).show()
-                                                mostrarDialogoPanico = false
-                                            }
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                            ) { Text("Enviar Alerta") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { mostrarDialogoPanico = false }) { Text("Cancelar") }
-                        }
-                    )
-                }
-
-                // --- BOTÓN DE ABORDAJE ---
-                Button(
-                    onClick = {
-                        rastreandoAbordaje = !rastreandoAbordaje
-                        val intentRastreo = Intent(context, ServicioRastreoPasajero::class.java)
-                        if (rastreandoAbordaje) ContextCompat.startForegroundService(context, intentRastreo)
-                        else context.stopService(intentRastreo)
-                    },
-                    modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 32.dp, start = 16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray)
+                FloatingActionButton(
+                    onClick = { },
+                    containerColor = Color(0xFF8E24AA),
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Text(if (rastreandoAbordaje) "⏹️ Detener Búsqueda" else "✅ Registrar Abordaje")
+                    Text("🎫", color = Color.White)
                 }
+            }
 
-                // Botón de Cerrar Sesión
-                Button(
-                    onClick = onCerrarSesion,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Cerrar Sesión")
-                }
-
-                // Vistas de ayuda
-                if (vistaAyudaActual == "ACERCA") {
-                    AlertDialog(onDismissRequest = { vistaAyudaActual = null }, title = { Text("Acerca de POPABUS") }, text = { Text("Plataforma de movilidad para Popayán.") }, confirmButton = { TextButton(onClick = { vistaAyudaActual = null }) { Text("Cerrar") } })
-                } else if (vistaAyudaActual == "PREGUNTAS") {
-                    AlertDialog(onDismissRequest = { vistaAyudaActual = null }, title = { Text("Preguntas Frecuentes") }, text = { Text("Usa la barra superior para buscar rutas o reportar problemas.") }, confirmButton = { TextButton(onClick = { vistaAyudaActual = null }) { Text("Cerrar") } })
-                } else if (vistaAyudaActual == "SUGERENCIAS") {
-                    var sugerencia by remember { mutableStateOf("") }
-                    AlertDialog(
-                        onDismissRequest = { vistaAyudaActual = null },
-                        title = { Text("Buzón de Sugerencias") },
-                        text = { OutlinedTextField(value = sugerencia, onValueChange = { sugerencia = it }, label = { Text("Tu sugerencia...") }) },
-                        confirmButton = { Button(onClick = { Toast.makeText(context, "Enviado (Simulado)", Toast.LENGTH_SHORT).show(); vistaAyudaActual = null }) { Text("Enviar") } }
-                    )
-                }
+            // Botón de Cerrar Sesión
+            Button(
+                onClick = onCerrarSesion,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+            ) {
+                Text("Salir")
             }
         }
     }
