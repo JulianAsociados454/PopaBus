@@ -138,6 +138,15 @@ data class IncidenciaRespuesta(
     val latitud: Double = 0.0,
     val longitud: Double = 0.0
 )
+@Serializable
+data class RutaRespuesta(
+    val id: String = "",
+    val nombre_ruta: String,
+    val origen: String,
+    val destino: String,
+    val estado: String = "activa",
+    val geometria: String = "[]"
+)
 
 // --- SEED: Crear los usuarios de prueba al arrancar ---
 fun seedUsuarios() {
@@ -568,5 +577,59 @@ fun Application.configureRouting() {
             println("⚠️ Incidencia creada: ${request.descripcion}")
             call.respond(HttpStatusCode.Created, mapOf("status" to "ok", "id" to nuevoId))
         }
+        // --- ENDPOINTS DE RUTAS ---
+        get("/api/rutas") {
+            val lista = transaction {
+                Rutas.selectAll().map { fila ->
+                    RutaRespuesta(
+                        id = fila[Rutas.id],
+                        nombre_ruta = fila[Rutas.nombreRuta],
+                        origen = fila[Rutas.origen],
+                        destino = fila[Rutas.destino],
+                        estado = fila[Rutas.estado],
+                        geometria = fila[Rutas.geometria]
+                    )
+                }
+            }
+            call.respond(lista)
+        }
+
+        post("/api/rutas") {
+            val request = call.receive<RutaRespuesta>()
+            val nuevoId = if (request.id.isNotEmpty()) request.id else "ruta_${System.currentTimeMillis()}"
+
+            transaction {
+                // Si la ruta ya existe (migración), la actualizamos. Si no, la insertamos.
+                val existe = Rutas.selectAll().where { Rutas.id eq nuevoId }.any()
+                if (existe) {
+                    Rutas.update({ Rutas.id eq nuevoId }) {
+                        it[nombreRuta] = request.nombre_ruta
+                        it[origen] = request.origen
+                        it[destino] = request.destino
+                        it[estado] = request.estado
+                        it[geometria] = request.geometria
+                    }
+                } else {
+                    Rutas.insert {
+                        it[id] = nuevoId
+                        it[nombreRuta] = request.nombre_ruta
+                        it[origen] = request.origen
+                        it[destino] = request.destino
+                        it[estado] = request.estado
+                        it[geometria] = request.geometria
+                    }
+                }
+            }
+            println("🗺️ Ruta migrada/creada: ${request.nombre_ruta}")
+            call.respond(HttpStatusCode.Created, mapOf("status" to "ok", "id" to nuevoId))
+        }
+
+        delete("/api/rutas/{id}") {
+            val id = call.parameters["id"] ?: ""
+            val eliminado = transaction { Rutas.deleteWhere { Rutas.id eq id } }
+            if (eliminado > 0) call.respond(mapOf("status" to "ok"))
+            else call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
+        }
     }
+
 }
