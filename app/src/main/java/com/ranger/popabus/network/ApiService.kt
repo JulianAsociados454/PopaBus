@@ -165,5 +165,10 @@ interface ApiService {
     suspend fun crearIncidencia(@Body incidencia: IncidenciaRespuesta): Response<Map<String, String>>
     @GET("/api/rutas")
     suspend fun listarRutas(): Response<List<RutaRespuesta>>
+    @POST("/api/rutas")
+    suspend fun crearRuta(@Body ruta: RutaRespuesta): Response<Map<String, String>>
+
+    @DELETE("/api/rutas/{id}")
+    suspend fun eliminarRuta(@Path("id") id: String): Response<Map<String, String>>
 
 }

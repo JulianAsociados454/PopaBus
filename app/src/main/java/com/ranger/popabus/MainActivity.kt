@@ -1,5 +1,9 @@
 package com.ranger.popabus
 import android.Manifest
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import android.annotation.SuppressLint
@@ -373,7 +377,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PopaBusTheme {
                 // EVOLUCIÓN: Ahora controlamos pantallas completas, no solo roles
-                var pantallaActual by remember { mutableStateOf("LOGIN") }
+                var pantallaActual by rememberSaveable { mutableStateOf("LOGIN") }
 
                 when (pantallaActual) {
                     "LOGIN" -> PantallaLogin(
@@ -618,79 +622,49 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
     }
 }
 
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, String, String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val auth = remember { FirebaseAuth.getInstance() } // Instancia de Firebase Auth
-
     var nombre by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var rolSeleccionado by remember { mutableStateOf("pasajero") }
+    var expandido by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Crear Cuenta", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = nombre,
-            onValueChange = { nombre = it },
-            label = { Text("Nombre completo") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre completo") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(value = correo, onValueChange = { correo = it }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(value = contrasena, onValueChange = { contrasena = it }, label = { Text("Contraseña") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = correo,
-            onValueChange = { correo = it },
-            label = { Text("Correo electrónico") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = contrasena,
-            onValueChange = { contrasena = it },
-            label = { Text("Contraseña") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation()
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Selección de Rol
-        Text("¿Qué tipo de usuario eres?", style = MaterialTheme.typography.bodyLarge)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = { rolSeleccionado = "pasajero" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (rolSeleccionado == "pasajero") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Text("Pasajero")
-            }
-            Button(
-                onClick = { rolSeleccionado = "conductor" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (rolSeleccionado == "conductor") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Text("Conductor")
+        // --- MENÚ DESPLEGABLE DE ROL ---
+        ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = { expandido = !expandido }) {
+            OutlinedTextField(
+                value = rolSeleccionado.replaceFirstChar { it.uppercase() },
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Selecciona tu Rol") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
+                listOf("pasajero", "conductor").forEach { rol ->
+                    DropdownMenuItem(
+                        text = { Text(rol.replaceFirstChar { it.uppercase() }) },
+                        onClick = { rolSeleccionado = rol; expandido = false }
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = {
@@ -698,46 +672,23 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
                     scope.launch {
                         try {
                             val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.registrar(
-                                com.ranger.popabus.network.RegisterRequest(
-                                    correo = correo,
-                                    contrasena = contrasena,
-                                    nombre_completo = nombre,
-                                    rol = rolSeleccionado
-                                )
+                                com.ranger.popabus.network.RegisterRequest(correo, contrasena, nombre, rolSeleccionado)
                             )
-
                             if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
                                 val datos = respuesta.body()!!
-                                Toast.makeText(
-                                    context,
-                                    " Cuenta creada: ${datos.nombre_completo}",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                // Notificamos a MainActivity para que navegue
+                                Toast.makeText(context, "Cuenta creada: ${datos.nombre_completo}", Toast.LENGTH_LONG).show()
                                 onRegistroExitoso(datos.uid, datos.nombre_completo, datos.rol)
-                            } else {
-                                val msj = respuesta.body()?.mensaje ?: "Error ${respuesta.code()}"
-                                Toast.makeText(context, " $msj", Toast.LENGTH_LONG).show()
                             }
                         } catch (e: Exception) {
-                            Toast.makeText(context, " Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
-                            Log.e("RegisterTest", "Error en registro", e)
+                            Toast.makeText(context, "Error de red", Toast.LENGTH_LONG).show()
                         }
                     }
-                } else {
-                    Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Registrarme")
-        }
+        ) { Text("Registrarme") }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        TextButton(onClick = onVolverLogin) {
-            Text("¿Ya tienes cuenta? Inicia sesión aquí")
-        }
+        TextButton(onClick = onVolverLogin) { Text("¿Ya tienes cuenta? Inicia sesión aquí") }
     }
 }
 
@@ -1460,250 +1411,167 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
 @Composable
 fun PantallaGestionRutas(onVolver: () -> Unit) {
     val context = LocalContext.current
-    val database = remember { FirebaseDatabase.getInstance() }
-    val refRutas = database.getReference("rutas")
-
-    // Estados para el formulario
+    val scope = rememberCoroutineScope()
     var nombreRuta by remember { mutableStateOf("") }
     var origen by remember { mutableStateOf("") }
     var destino by remember { mutableStateOf("") }
+    var listaRutas by remember { mutableStateOf<List<com.ranger.popabus.network.RutaRespuesta>>(emptyList()) }
 
-    // Estado para la lista en tiempo real
-    var listaRutas by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
-
-    // Descargamos las rutas de Firebase en tiempo real
-    DisposableEffect(Unit) {
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val rutas = mutableListOf<RutaOficial>()
-                for (hijo in snapshot.children) {
-                    val r = hijo.getValue(RutaOficial::class.java)
-                    if (r != null) {
-                        rutas.add(r.copy(id = hijo.key ?: ""))
-                    }
-                }
-                listaRutas = rutas
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
+    fun recargar() {
+        scope.launch {
+            try {
+                val res = com.ranger.popabus.network.RetrofitClient.apiService.listarRutas()
+                if (res.isSuccessful) listaRutas = res.body() ?: emptyList()
+            } catch (e: Exception) {}
         }
-        refRutas.addValueEventListener(listener)
-        onDispose { refRutas.removeEventListener(listener) }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    LaunchedEffect(Unit) { recargar() }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Gestión de Rutas", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Formulario alineado a tu diccionario de datos
-        OutlinedTextField(value = nombreRuta, onValueChange = { nombreRuta = it }, label = { Text("Nombre (Ej: Línea 1)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = nombreRuta, onValueChange = { nombreRuta = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = origen, onValueChange = { origen = it }, label = { Text("Origen (Ej: Norte)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = origen, onValueChange = { origen = it }, label = { Text("Origen") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = destino, onValueChange = { destino = it }, label = { Text("Destino (Ej: Centro)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-
+        OutlinedTextField(value = destino, onValueChange = { destino = it }, label = { Text("Destino") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
-            onClick = {
-                if (nombreRuta.isNotEmpty() && origen.isNotEmpty() && destino.isNotEmpty()) {
-                    val nuevaRutaRef = refRutas.push() // Firebase genera el _id
-
-                    val nuevaRuta = RutaOficial(
-                        nombre_ruta = nombreRuta,
-                        origen = origen,
-                        destino = destino,
-                        estado = "activa"
-                        // paraderos y geometria inician vacíos, listos para ser llenados luego
-                    )
-
-                    nuevaRutaRef.setValue(nuevaRuta).addOnSuccessListener {
+        Button(onClick = {
+            if (nombreRuta.isNotEmpty()) {
+                scope.launch {
+                    try {
+                        val req = com.ranger.popabus.network.RutaRespuesta(nombre_ruta = nombreRuta, origen = origen, destino = destino)
+                        com.ranger.popabus.network.RetrofitClient.apiService.crearRuta(req)
+                        nombreRuta = ""; origen = ""; destino = ""
+                        recargar()
                         Toast.makeText(context, "Ruta Creada", Toast.LENGTH_SHORT).show()
-                        nombreRuta = ""
-                        origen = ""
-                        destino = ""
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    Toast.makeText(context, "Por favor llene todos los campos", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {}
                 }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("➕ Crear Ruta Base")
-        }
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text("➕ Crear Ruta") }
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        Text("Rutas Registradas: ${listaRutas.size}", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Lista visual para ver lo que hay en Firebase
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaRutas) { ruta ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
+                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), elevation = CardDefaults.cardElevation(2.dp)) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("🗺️ ${ruta.nombre_ruta}", style = MaterialTheme.typography.titleMedium)
-                        Text("De: ${ruta.origen} ➔ A: ${ruta.destino}", style = MaterialTheme.typography.bodyMedium)
-                        Text("Estado: ${ruta.estado}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("De: ${ruta.origen} ➔ A: ${ruta.destino}")
+                        OutlinedButton(onClick = {
+                            scope.launch { com.ranger.popabus.network.RetrofitClient.apiService.eliminarRuta(ruta.id); recargar() }
+                        }) { Text("🗑️ Eliminar") }
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-            Text("Volver al Menú")
-        }
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Volver") }
     }
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionBuses(onVolver: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    // Estados del formulario
     var placa by remember { mutableStateOf("") }
     var modelo by remember { mutableStateOf("") }
     var idRuta by remember { mutableStateOf("") }
     var idConductor by remember { mutableStateOf("") }
 
-    // Lista de buses
     var listaBuses by remember { mutableStateOf<List<com.ranger.popabus.network.BusRespuesta>>(emptyList()) }
+    var listaRutas by remember { mutableStateOf<List<com.ranger.popabus.network.RutaRespuesta>>(emptyList()) }
+    var listaUsuarios by remember { mutableStateOf<List<com.ranger.popabus.network.UsuarioRespuesta>>(emptyList()) }
 
-    // Función para recargar la lista
-    fun recargarBuses() {
+    fun recargar() {
         scope.launch {
             try {
-                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.listarBuses()
-                if (respuesta.isSuccessful) {
-                    listaBuses = respuesta.body() ?: emptyList()
-                    Log.d("BusesAdmin", "Cargados ${listaBuses.size} buses")
-                }
-            } catch (e: Exception) {
-                Log.e("BusesAdmin", "Error listando buses: ${e.message}")
-            }
+                val b = com.ranger.popabus.network.RetrofitClient.apiService.listarBuses()
+                if (b.isSuccessful) listaBuses = b.body() ?: emptyList()
+                val r = com.ranger.popabus.network.RetrofitClient.apiService.listarRutas()
+                if (r.isSuccessful) listaRutas = r.body() ?: emptyList()
+                val u = com.ranger.popabus.network.RetrofitClient.apiService.listarUsuarios()
+                if (u.isSuccessful) listaUsuarios = u.body()?.filter { it.rol == "conductor" } ?: emptyList()
+            } catch (e: Exception) {}
         }
     }
 
-    // Carga inicial
-    LaunchedEffect(Unit) {
-        recargarBuses()
-    }
+    LaunchedEffect(Unit) { recargar() }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Gestión de Vehículos", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(value = placa, onValueChange = { placa = it }, label = { Text("Placa (Ej: TJU-123)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = placa, onValueChange = { placa = it }, label = { Text("Placa") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = modelo, onValueChange = { modelo = it }, label = { Text("Modelo/Año") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = modelo, onValueChange = { modelo = it }, label = { Text("Modelo") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = idRuta, onValueChange = { idRuta = it }, label = { Text("ID de la Ruta (Opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = idConductor, onValueChange = { idConductor = it }, label = { Text("UID del Conductor (Opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                if (placa.isNotEmpty()) {
-                    scope.launch {
-                        try {
-                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearBus(
-                                com.ranger.popabus.network.BusRespuesta(
-                                    id = "",
-                                    placa = placa,
-                                    modelo = modelo,
-                                    id_ruta = idRuta,
-                                    id_conductor_actual = idConductor,
-                                    estado = "activo"
-                                )
-                            )
-                            if (respuesta.isSuccessful) {
-                                Toast.makeText(context, "Bus Registrado", Toast.LENGTH_SHORT).show()
-                                placa = ""
-                                modelo = ""
-                                idRuta = ""
-                                idConductor = ""
-                                recargarBuses()
-                            } else {
-                                Toast.makeText(context, "Error al guardar (${respuesta.code()})", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                            Log.e("BusesAdmin", "Error creando bus", e)
-                        }
-                    }
-                } else {
-                    Toast.makeText(context, "La placa es obligatoria", Toast.LENGTH_SHORT).show()
+        // Dropdown Ruta
+        var expRuta by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(expanded = expRuta, onExpandedChange = { expRuta = !expRuta }) {
+            OutlinedTextField(
+                value = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta",
+                onValueChange = {}, readOnly = true, label = { Text("Asignar Ruta") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expRuta) },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(expanded = expRuta, onDismissRequest = { expRuta = false }) {
+                listaRutas.forEach { ruta ->
+                    DropdownMenuItem(text = { Text(ruta.nombre_ruta) }, onClick = { idRuta = ruta.id; expRuta = false })
                 }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("➕ Registrar Bus")
+            }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text("Vehículos Registrados: ${listaBuses.size}", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(listaBuses) { bus ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("🚐 Placa: ${bus.placa}", style = MaterialTheme.typography.titleMedium)
-                        Text("Modelo: ${bus.modelo} | Estado: ${bus.estado}", style = MaterialTheme.typography.bodyMedium)
-                        Text("Ruta Asignada: ${bus.id_ruta.ifEmpty { "Ninguna" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        Text("Conductor UID: ${bus.id_conductor_actual.ifEmpty { "Ninguno" }}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.eliminarBus(bus.id)
-                                        if (respuesta.isSuccessful) {
-                                            Toast.makeText(context, "Bus eliminado", Toast.LENGTH_SHORT).show()
-                                            recargarBuses()
-                                        }
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                        ) {
-                            Text("🗑️ Eliminar")
-                        }
-                    }
+        // Dropdown Conductor
+        var expCond by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(expanded = expCond, onExpandedChange = { expCond = !expCond }) {
+            OutlinedTextField(
+                value = listaUsuarios.find { it.uid == idConductor }?.nombre_completo ?: "Sin conductor",
+                onValueChange = {}, readOnly = true, label = { Text("Asignar Conductor") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expCond) },
+                modifier = Modifier.menuAnchor().fillMaxWidth()
+            )
+            ExposedDropdownMenu(expanded = expCond, onDismissRequest = { expCond = false }) {
+                listaUsuarios.forEach { u ->
+                    DropdownMenuItem(text = { Text(u.nombre_completo) }, onClick = { idConductor = u.uid; expCond = false })
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = {
+            if (placa.isNotEmpty()) {
+                scope.launch {
+                    try {
+                        val req = com.ranger.popabus.network.BusRespuesta(id = "", placa = placa, modelo = modelo, id_ruta = idRuta, id_conductor_actual = idConductor)
+                        com.ranger.popabus.network.RetrofitClient.apiService.crearBus(req)
+                        placa = ""; modelo = ""; idRuta = ""; idConductor = ""
+                        recargar()
+                        Toast.makeText(context, "Bus Registrado", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {}
+                }
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text("➕ Registrar Bus") }
 
-        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-            Text("Volver al Menú")
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(listaBuses) { bus ->
+                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("🚐 ${bus.placa} - ${bus.modelo}", style = MaterialTheme.typography.titleMedium)
+                        Text("Ruta: ${listaRutas.find { it.id == bus.id_ruta }?.nombre_ruta ?: "Ninguna"}", style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = {
+                            scope.launch { com.ranger.popabus.network.RetrofitClient.apiService.eliminarBus(bus.id); recargar() }
+                        }) { Text("🗑️ Eliminar") }
+                    }
+                }
+            }
         }
+        Button(onClick = onVolver, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) { Text("Volver") }
     }
 }
 
