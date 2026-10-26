@@ -95,6 +95,11 @@ class ServicioGpsConductor : Service() {
             override fun onLocationResult(locationResult: LocationResult) {
                 if (usandoMock) return
                 for (location in locationResult.locations) {
+                    // BUG-06: Filtro de precisión estricto para ignorar rebotes de señal (saltos a casas)
+                    if (location.accuracy > 20) {
+                        continue // Ignoramos esta coordenada por ser demasiado imprecisa
+                    }
+
                     val hash = calcularGeohash(location.latitude, location.longitude)
 
                     val datosBus = mapOf(
