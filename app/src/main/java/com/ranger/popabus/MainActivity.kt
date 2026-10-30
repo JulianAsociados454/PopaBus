@@ -38,7 +38,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -54,7 +54,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ServerValue
+
 import com.google.firebase.database.ValueEventListener
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
@@ -69,6 +69,40 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
+
+
+
+
+import androidx.compose.foundation.BorderStroke
+
+import com.google.firebase.auth.GoogleAuthProvider
+
+
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+
+
+import androidx.credentials.CustomCredential
+import com.google.firebase.database.ServerValue
+import androidx.compose.ui.text.withStyle
+
+
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+
+
+
 
 
 
@@ -395,12 +429,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PopaBusTheme {
-                var pantallaActual by rememberSaveable { mutableStateOf("LOGIN") }
+// Evolución: El estado inicial ahora es el Splash[cite: 4]
+                var pantallaActual by remember { mutableStateOf("SPLASH") }
 
                 when (pantallaActual) {
+                    "SPLASH" -> PantallaSplash(onSplashTerminado = { pantallaActual = "LOGIN" })
                     "LOGIN" -> PantallaLogin(
                         onIrARegistro = { pantallaActual = "REGISTRO" },
                         onLoginExitoso = { rolRecibido ->
+                            // ... tu lógica de enrutamiento intacta[cite: 4, 10]
                             val rolEnum = RolUsuario.desdeString(rolRecibido)
                             when (rolEnum) {
                                 RolUsuario.CONDUCTOR -> pantallaActual = "CONDUCTOR"
@@ -458,133 +495,115 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val auth = remember { FirebaseAuth.getInstance() }
     val database = remember { FirebaseDatabase.getInstance() }
 
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
 
-    // Colores extraídos del Mockup
-    val primaryBlue = Color(0xFF2563EB)
-    val darkText = Color(0xFF1E293B)
-    val grayText = Color(0xFF64748B)
-    val tealText = Color(0xFF0D9488)
-    val lightGrayBg = Color(0xFFF8FAFC)
+    val WEB_CLIENT_ID = "519575230065-fe8et4hv5issfchig8pdarg8nuitspcu.apps.googleusercontent.com"
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Logo PopaBus
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(primaryBlue, shape = RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 1. Logo y Título PopaBus (Restaurado)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF2563EB),
+                modifier = Modifier.size(48.dp)
             ) {
-                // Puedes usar tu R.drawable.ic_bus si lo prefieres en lugar de este icono por defecto
                 Icon(
                     imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus,
                     contentDescription = "Logo",
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.padding(8.dp)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            androidx.compose.material3.Text(
-                text = androidx.compose.ui.text.buildAnnotatedString {
-                    withStyle(style = androidx.compose.ui.text.SpanStyle(color = darkText, fontWeight = FontWeight.Bold, fontSize = 26.sp)) {
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(style = SpanStyle(color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
                         append("Popa")
                     }
-                    withStyle(style = androidx.compose.ui.text.SpanStyle(color = tealText, fontWeight = FontWeight.Bold, fontSize = 26.sp)) {
+                    withStyle(style = SpanStyle(color = Color(0xFF0D9488), fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
                         append("Bus")
                     }
                 }
             )
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // 2. Textos de Bienvenida
-        Text(
-            text = "Bienvenido",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = darkText)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Ingresa para guardar tus rutas y\npreferencias.",
-            textAlign = TextAlign.Center,
-            color = grayText,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Text("Bienvenido", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Tu ciudad se mueve contigo", fontSize = 14.sp, color = Color(0xFF64748B))
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // 3. Campo: Correo
+        // 2. Campo Correo (Restaurado)
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text("Correo", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+            Text("Correo", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B), fontSize = 14.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            androidx.compose.material3.OutlinedTextField(
+            OutlinedTextField(
                 value = correo,
                 onValueChange = { correo = it },
                 placeholder = { Text("tu@correo.com", color = Color.LightGray) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
                 shape = RoundedCornerShape(12.dp),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = lightGrayBg,
-                    focusedContainerColor = lightGrayBg,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = primaryBlue
-                )
+                singleLine = true
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 4. Campo: Contraseña
+        // 3. Campo Contraseña (Restaurado)
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text("Contraseña", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+            Text("Contraseña", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B), fontSize = 14.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            androidx.compose.material3.OutlinedTextField(
+            OutlinedTextField(
                 value = contrasena,
                 onValueChange = { contrasena = it },
                 placeholder = { Text("Ingresa tu contraseña", color = Color.LightGray) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
                 shape = RoundedCornerShape(12.dp),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = lightGrayBg,
-                    focusedContainerColor = lightGrayBg,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = primaryBlue
-                )
+                singleLine = true,
+                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(
+                                id = if (passwordVisible) android.R.drawable.ic_menu_view else android.R.drawable.ic_secure
+                            ),
+                            contentDescription = "Alternar contraseña",
+                            tint = Color.Gray
+                        )
+                    }
+                }
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-
-        // 5. Enlace ¿Olvidaste tu contraseña?
         Text(
-            text = "¿Olvidaste tu contraseña?",
-            color = primaryBlue,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.End
+            text = "¿Problemas para ingresar?",
+            color = Color(0xFF2563EB),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.align(Alignment.End).clickable { /* Lógica recuperar */ }
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // 6. Botón: Ingresar (Lógica Firebase Intacta)[cite: 7]
+        // 4. Botón Ingresar (Restaurado)
         Button(
             onClick = {
                 if (correo.isNotEmpty() && contrasena.isNotEmpty()) {
@@ -600,7 +619,7 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                                             val activo = snapshot.child("activo").getValue(Boolean::class.java) ?: true
                                             if (!activo) {
                                                 auth.signOut()
-                                                Toast.makeText(context, "ACCESO DENEGADO: Cuenta suspendida", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(context, "ACCESO DENEGADO", Toast.LENGTH_LONG).show()
                                             } else {
                                                 val rol = snapshot.child("rol").getValue(String::class.java) ?: "pasajero"
                                                 Toast.makeText(context, "Bienvenido", Toast.LENGTH_SHORT).show()
@@ -609,7 +628,7 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                                         }
                                         .addOnFailureListener { error ->
                                             cargando = false
-                                            Toast.makeText(context, "Error al leer perfil: ${error.message}", Toast.LENGTH_LONG).show()
+                                            Toast.makeText(context, "Error al leer perfil", Toast.LENGTH_LONG).show()
                                         }
                                 }
                             } else {
@@ -621,45 +640,106 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                     Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
             enabled = !cargando
         ) {
-            Text(if (cargando) "Validando..." else "Ingresar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(if (cargando) "Validando..." else "Ingresar", fontWeight = FontWeight.Bold, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE2E8F0))
+            Text(" o ", color = Color(0xFF94A3B8), modifier = Modifier.padding(horizontal = 8.dp))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE2E8F0))
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 5. Botón Invitado (Restaurado)
+        OutlinedButton(
+            onClick = { onLoginExitoso("invitado") },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+        ) {
+            Text("Continuar sin registrarse", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 7. Botón: Modo Invitado[cite: 8]
-        androidx.compose.material3.OutlinedButton(
-            onClick = { onLoginExitoso("invitado") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDBEAFE)),
-            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = primaryBlue)
+        // 6. Botón Google
+        OutlinedButton(
+            onClick = {
+                cargando = true
+                coroutineScope.launch {
+                    try {
+                        val credentialManager = CredentialManager.create(context)
+                        val googleIdOption = GetGoogleIdOption.Builder()
+                            .setFilterByAuthorizedAccounts(false)
+                            .setServerClientId(WEB_CLIENT_ID)
+                            .setAutoSelectEnabled(true)
+                            .build()
+
+                        val request = GetCredentialRequest.Builder()
+                            .addCredentialOption(googleIdOption)
+                            .build()
+
+                        val result = credentialManager.getCredential(context, request)
+                        val credential = result.credential
+
+                        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                            val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+
+                            auth.signInWithCredential(firebaseCredential).addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    val user = auth.currentUser
+                                    if (user?.uid != null) {
+                                        val ref = database.getReference("usuarios").child(user.uid)
+                                        ref.get().addOnSuccessListener { snap ->
+                                            if (snap.exists()) {
+                                                val activo = snap.child("activo").getValue(Boolean::class.java) ?: true
+                                                if (!activo) { auth.signOut(); cargando = false; Toast.makeText(context, "CUENTA SUSPENDIDA", Toast.LENGTH_LONG).show() }
+                                                else { cargando = false; onLoginExitoso(snap.child("rol").getValue(String::class.java) ?: "pasajero") }
+                                            } else {
+                                                ref.setValue(mapOf("nombre_completo" to (user.displayName ?: ""), "correo" to (user.email ?: ""), "rol" to "pasajero", "activo" to true, "fecha_registro" to ServerValue.TIMESTAMP)).addOnSuccessListener {
+                                                    cargando = false; onLoginExitoso("pasajero")
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else { cargando = false; Toast.makeText(context, "Error Auth", Toast.LENGTH_SHORT).show() }
+                            }
+                        } else { cargando = false; Toast.makeText(context, "Credencial no válida", Toast.LENGTH_SHORT).show() }
+                    } catch (e: Exception) { cargando = false; Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show() }
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            enabled = !cargando
         ) {
-            Text("Continuar sin registrarse", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_google_logo), contentDescription = "Google", tint = Color.Unspecified, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(if (cargando) "Accediendo..." else "Continuar con Google", color = Color(0xFF1E293B), fontWeight = FontWeight.SemiBold)
+            }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
-        // 8. Pie de página
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text("¿Aún no tienes cuenta? ", color = grayText, style = MaterialTheme.typography.bodySmall)
-            Text(
-                text = "Regístrate aquí",
-                color = primaryBlue,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.clickable { onIrARegistro() }
-            )
+        // 7. Enlace de Registro (Restaurado)
+        Row(modifier = Modifier.padding(bottom = 16.dp)) {
+            Text("¿No tienes cuenta? ", color = Color(0xFF64748B))
+            Text("Regístrate aquí", color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onIrARegistro() })
         }
     }
 }
@@ -1042,6 +1122,11 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 // Botón para INICIAR
                     Button(
                         onClick = {
+                            if (!permisoConcedido) {
+                                Toast.makeText(context, "Se requieren permisos de ubicación para iniciar.", Toast.LENGTH_LONG).show()
+                                return@Button
+                            }
+
                             val uid = auth.currentUser?.uid ?: "CONDUCTOR_DESCONOCIDO"
                             val refBuses = database.getReference("buses")
 
@@ -1077,12 +1162,17 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                         horaInicioViaje = System.currentTimeMillis()
                                         contadorAlertas = 0
 
-                                        val intent = Intent(context, ServicioGpsConductor::class.java)
-                                        intent.putExtra("ID_RECORRIDO", idGenerado)
-                                        intent.putExtra("ID_BUS", busIdReal)
-                                        ContextCompat.startForegroundService(context, intent)
+                                        try {
+                                            val intent = Intent(context, ServicioGpsConductor::class.java)
+                                            intent.putExtra("ID_RECORRIDO", idGenerado)
+                                            intent.putExtra("ID_BUS", busIdReal)
+                                            ContextCompat.startForegroundService(context, intent)
 
-                                        Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            Log.e("DepuradorBuses", "Crash evitado al iniciar Foreground Service", e)
+                                            Toast.makeText(context, "No se pudo iniciar el servicio GPS.", Toast.LENGTH_LONG).show()
+                                        }
                                     }
                                 } else {
                                     Log.e("DepuradorBuses", "RESULTADO CERO: Firebase dice que no existe un bus con conductor = [$uid]")
@@ -1093,7 +1183,11 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                 Toast.makeText(context, "Fallo: ${excepcion.message}", Toast.LENGTH_LONG).show()
                             }
                         },
-                        enabled = permisoConcedido,
+                        enabled = true,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White
+                        ),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
                     ) {
                         Text("▶️ Iniciar Recorrido Oficial")
@@ -3794,6 +3888,135 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
             Text("Volver al Menú")
         }
     }
+
 }
 
+@Composable
+fun PantallaSplash(onSplashTerminado: () -> Unit) {
+    val offsetX = remember { androidx.compose.animation.core.Animatable(-300f) }
+    val alpha = remember { androidx.compose.animation.core.Animatable(0f) }
+    val resplandor = remember { androidx.compose.animation.core.Animatable(2f) }
 
+    // NUEVO: Estado para animar la barra inferior de 0 a 1 (0% a 100%)
+    val progresoBarra = remember { androidx.compose.animation.core.Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        // 1. Movimiento del bus: Entra rápido, frena suave (Dura 1.5s)
+        launch {
+            offsetX.animateTo(
+                targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 1500,
+                    easing = androidx.compose.animation.core.LinearOutSlowInEasing
+                )
+            )
+        }
+
+        // 2. Opacidad: Sincronizada con el movimiento (Dura 1.5s)
+        launch {
+            alpha.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 1500,
+                    easing = androidx.compose.animation.core.LinearEasing
+                )
+            )
+        }
+
+        // 3. Brillo del contenedor: Se activa al detenerse (Dura 400ms)
+        launch {
+            kotlinx.coroutines.delay(1300)
+            resplandor.animateTo(
+                targetValue = 24f,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 400)
+            )
+        }
+
+        // 4. Barra de progreso: Se llena suavemente (Dura 1.8s)
+        launch {
+            progresoBarra.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 1800,
+                    easing = androidx.compose.animation.core.FastOutSlowInEasing
+                )
+            )
+        }
+
+        // 5. SALTO EXACTO Y ESTRICTO A LOS 2.8 SEGUNDOS DESDE EL INICIO
+        launch {
+            kotlinx.coroutines.delay(2800) // 2.8 segundos absolutos de contemplación
+            onSplashTerminado()
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.White)
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            drawLine(color = Color(0xFFF1F5F9), start = androidx.compose.ui.geometry.Offset(0f, size.height * 0.2f), end = androidx.compose.ui.geometry.Offset(size.width, size.height * 0.45f), strokeWidth = 4f)
+            drawLine(color = Color(0xFFF1F5F9), start = androidx.compose.ui.geometry.Offset(0f, size.height * 0.85f), end = androidx.compose.ui.geometry.Offset(size.width, size.height * 0.6f), strokeWidth = 4f)
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.align(Alignment.Center).offset(x = offsetX.value.dp).alpha(alpha.value)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) {
+                val gradient = androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0x000D9488), Color(0xFF0D9488)))
+                Spacer(modifier = Modifier.width(20.dp).height(2.dp).background(gradient))
+                Spacer(modifier = Modifier.width(45.dp).height(2.dp).background(gradient))
+                Spacer(modifier = Modifier.width(35.dp).height(2.dp).background(gradient))
+                Spacer(modifier = Modifier.width(15.dp).height(2.dp).background(gradient))
+            }
+
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF2563EB),
+                shadowElevation = resplandor.value.dp,
+                modifier = Modifier.size(90.dp)
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus,
+                    contentDescription = "Logo",
+                    tint = Color.White,
+                    modifier = Modifier.padding(20.dp).fillMaxSize()
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp).alpha(alpha.value),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFF2563EB), modifier = Modifier.size(36.dp)) {
+                    Icon(imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus, contentDescription = null, tint = Color.White, modifier = Modifier.padding(6.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Popa", fontSize = 32.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color(0xFF1E293B))
+                Text("Bus", fontSize = 32.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color(0xFF0D9488))
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("Tu bus, en tiempo real", fontSize = 14.sp, color = Color(0xFF64748B))
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // NUEVO: Contenedor gris estático y barra turquesa dinámica superpuesta
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(3.dp)
+                    .background(Color(0xFFE2E8F0), RoundedCornerShape(50)), // Fondo gris clarito
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth(progresoBarra.value) // El ancho depende del estado animado (0 a 1f)
+                        .height(3.dp)
+                        .background(Color(0xFF0D9488), RoundedCornerShape(50)) // Barra verde turquesa
+                )
+            }
+        }
+    }
+}

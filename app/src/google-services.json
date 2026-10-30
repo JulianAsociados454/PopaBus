@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "519575230065",
+    "firebase_url": "https://popabus-41b42-default-rtdb.firebaseio.com",
     "project_id": "popabus-41b42",
     "storage_bucket": "popabus-41b42.firebasestorage.app"
   },
@@ -12,7 +13,20 @@
           "package_name": "com.ranger.popabus"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "519575230065-enba9r2vnfadfet57r1krnfklaojehgu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ranger.popabus",
+            "certificate_hash": "cc24c719b572ee21726e42e15243fa53780117af"
+          }
+        },
+        {
+          "client_id": "519575230065-fe8et4hv5issfchig8pdarg8nuitspcu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAxkEmM6QJPsLxVVWrT_UUm1DzG2coxSZo"
@@ -20,7 +34,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "519575230065-fe8et4hv5issfchig8pdarg8nuitspcu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
