@@ -30,10 +30,8 @@ class ServicioGpsConductor : Service() {
     private var idRecorrido: String? = null
     private var idBusReal: String = "BUS_DESCONOCIDO"
 
-    // Scope para las llamadas asíncronas a Retrofit
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // Mantenemos tus superpoderes de ADB para las pruebas
     private var mockReceiver: BroadcastReceiver? = null
     private var usandoMock = false
 
@@ -49,14 +47,15 @@ class ServicioGpsConductor : Service() {
         idRecorrido = intent?.getStringExtra("ID_RECORRIDO")
         idBusReal = intent?.getStringExtra("ID_BUS") ?: "BUS_DESCONOCIDO"
 
-        startForeground(1, crearNotificacion())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(1, crearNotificacion(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } else {
+            startForeground(1, crearNotificacion())
+        }
         iniciarRastreoGps()
         return START_STICKY
     }
 
-    /**
-     * Envía una ubicación al backend por HTTP (Retrofit)
-     */
     private fun enviarUbicacionAlBackend(lat: Double, lng: Double, velocidad: Double) {
         val hash = calcularGeohash(lat, lng)
         val recorridoActual = idRecorrido
@@ -73,11 +72,8 @@ class ServicioGpsConductor : Service() {
                         velocidad = velocidad
                     )
                 )
-
                 if (respuesta.isSuccessful) {
-                    Log.d("GPS", "✅ Ubicación enviada al backend | Bus: $idBusReal | Lat: $lat, Lng: $lng")
-                } else {
-                    Log.w("GPS", "⚠️ Backend respondió ${respuesta.code()}")
+                    Log.d("GPS", "✅ Ubicación enviada a Render: $lat, $lng")
                 }
             } catch (e: Exception) {
                 Log.e("GPS", "❌ Error enviando ubicación: ${e.message}")
@@ -94,7 +90,7 @@ class ServicioGpsConductor : Service() {
                 val lng = intent.getFloatExtra("lng", 0f).toDouble()
 
                 if (lat != 0.0 && lng != 0.0) {
-                    enviarUbicacionAlBackend(lat, lng, velocidad = 0.0)
+                    enviarUbicacionAlBackend(lat, lng, 0.0)
                 }
             }
         }
@@ -109,36 +105,35 @@ class ServicioGpsConductor : Service() {
             override fun onLocationResult(locationResult: LocationResult) {
                 if (usandoMock) return
                 for (location in locationResult.locations) {
-                    enviarUbicacionAlBackend(
-                        lat = location.latitude,
-                        lng = location.longitude,
-                        velocidad = location.speed.toDouble()
-                    )
+
+                    // 🛑 FILTRO DE PRECISIÓN (El truco de tu amigo)
+                    // Si la precisión del GPS es peor a 20 metros, ignoramos la coordenada.
+                    if (location.accuracy > 20) {
+                        Log.d("GPS", "Coordenada ignorada por baja precisión: ${location.accuracy}m")
+                        continue
+                    }
+
+                    enviarUbicacionAlBackend(location.latitude, location.longitude, location.speed.toDouble())
                 }
             }
         }
 
         try {
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-        } catch (e: SecurityException) {
-            // La Activity ya garantizó los permisos
-        }
+        } catch (e: SecurityException) { }
     }
 
     private fun crearCanalNotificacion() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "CANAL_GPS_POPABUS", "Servicio GPS Conductor", NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            val channel = NotificationChannel("CANAL_GPS_POPABUS", "Servicio GPS Conductor", NotificationManager.IMPORTANCE_LOW)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     private fun crearNotificacion(): Notification {
         return NotificationCompat.Builder(this, "CANAL_GPS_POPABUS")
             .setContentTitle("POPABUS: Viaje en curso")
-            .setContentText("Transmitiendo ubicación a los pasajeros...")
+            .setContentText("Transmitiendo ubicación a Render...")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

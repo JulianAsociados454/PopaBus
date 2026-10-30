@@ -89,7 +89,8 @@ data class ParaderoRespuesta(
     val latitud: Double,
     val longitud: Double,
     val geohash: String = "",
-    val estado: String = "activo"
+    val estado: String = "activo",
+    val id_ruta: String = ""
 )
 data class UsuarioRespuesta(
     val uid: String,

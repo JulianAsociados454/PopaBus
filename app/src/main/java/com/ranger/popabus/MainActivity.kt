@@ -1,5 +1,21 @@
 package com.ranger.popabus
 import android.Manifest
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -469,46 +485,116 @@ fun PantallaSeleccionRol(onConductorSeleccionado: () -> Unit, onPasajeroSeleccio
         }
     }
 }
+
 @Composable
 fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val auth = remember { FirebaseAuth.getInstance() }
-    val database = remember { FirebaseDatabase.getInstance() }
 
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
-    var cargando by remember { mutableStateOf(false) } // Para mostrar retroalimentación visual
+    var cargando by remember { mutableStateOf(false) }
+
+    // Colores extraídos del Mockup de tu amigo
+    val primaryBlue = Color(0xFF2563EB)
+    val darkText = Color(0xFF1E293B)
+    val grayText = Color(0xFF64748B)
+    val tealText = Color(0xFF0D9488)
+    val lightGrayBg = Color(0xFFF8FAFC)
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Iniciar Sesión", style = MaterialTheme.typography.headlineMedium)
+        // 1. Logo PopaBus
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(primaryBlue, shape = RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.DirectionsBus,
+                    contentDescription = "Logo",
+                    tint = Color.White
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(style = SpanStyle(color = darkText, fontWeight = FontWeight.Bold, fontSize = 26.sp)) {
+                        append("Popa")
+                    }
+                    withStyle(style = SpanStyle(color = tealText, fontWeight = FontWeight.Bold, fontSize = 26.sp)) {
+                        append("Bus")
+                    }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        // 2. Textos de Bienvenida
+        Text("Bienvenido", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = darkText))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Ingresa para guardar tus rutas y\npreferencias.", textAlign = TextAlign.Center, color = grayText, style = MaterialTheme.typography.bodyMedium)
+
         Spacer(modifier = Modifier.height(32.dp))
 
-        OutlinedTextField(
-            value = correo,
-            onValueChange = { correo = it },
-            label = { Text("Correo electrónico") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        // 3. Campo: Correo
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("Correo", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = correo,
+                onValueChange = { correo = it },
+                placeholder = { Text("tu@correo.com", color = Color.LightGray) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = lightGrayBg,
+                    focusedContainerColor = lightGrayBg,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = primaryBlue
+                )
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = contrasena,
-            onValueChange = { contrasena = it },
-            label = { Text("Contraseña") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation()
-        )
+        // 4. Campo: Contraseña
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("Contraseña", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = contrasena,
+                onValueChange = { contrasena = it },
+                placeholder = { Text("Ingresa tu contraseña", color = Color.LightGray) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = lightGrayBg,
+                    focusedContainerColor = lightGrayBg,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = primaryBlue
+                )
+            )
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // 5. Botón: Ingresar (Conectado a Render)
         Button(
             onClick = {
                 if (correo.isNotEmpty() && contrasena.isNotEmpty()) {
@@ -516,109 +602,65 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
                     scope.launch {
                         try {
                             val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.login(
-                                com.ranger.popabus.network.LoginRequest(
-                                    correo = correo,
-                                    contrasena = contrasena
-                                )
+                                com.ranger.popabus.network.LoginRequest(correo, contrasena)
                             )
                             cargando = false
 
                             if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
                                 val datos = respuesta.body()!!
-                                Toast.makeText(
-                                    context,
-                                    "Bienvenido ${datos.nombre_completo}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                Toast.makeText(context, "Bienvenido ${datos.nombre_completo}", Toast.LENGTH_SHORT).show()
                                 onLoginExitoso(datos.rol)
                             } else {
-                                // Leemos el mensaje de error real del backend
                                 val errorJson = respuesta.errorBody()?.string()
                                 val msj = if (!errorJson.isNullOrEmpty()) {
                                     try {
-                                        val jsonObject = org.json.JSONObject(errorJson)
-                                        jsonObject.getString("mensaje")
-                                    } catch (e: Exception) {
-                                        "Error ${respuesta.code()}"
-                                    }
-                                } else {
-                                    "Error ${respuesta.code()}"
-                                }
+                                        org.json.JSONObject(errorJson).getString("mensaje")
+                                    } catch (e: Exception) { "Error ${respuesta.code()}" }
+                                } else { "Error ${respuesta.code()}" }
                                 Toast.makeText(context, msj, Toast.LENGTH_LONG).show()
                             }
                         } catch (e: Exception) {
                             cargando = false
-                            Toast.makeText(context, "❌ Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
-                            Log.e("LoginTest", "Error en login", e)
+                            Toast.makeText(context, "Error de conexión: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     }
                 } else {
                     Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
             enabled = !cargando
         ) {
-            Text(if (cargando) "Validando..." else "Ingresar")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-
-        TextButton(onClick = onIrARegistro) {
-            Text("¿No tienes cuenta? Regístrate aquí")
+            Text(if (cargando) "Validando..." else "Ingresar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
 
-
-
-        // --- NUEVO SPRINT 8: MODO INVITADO ---
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("o", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
+        // 6. Botón: Modo Invitado
         OutlinedButton(
-            onClick = {
-                // Saltamos la autenticación de Firebase y pasamos "invitado"
-                onLoginExitoso("invitado")
-            },
-            modifier = Modifier.fillMaxWidth()
+            onClick = { onLoginExitoso("invitado") },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryBlue)
         ) {
-            Text("Continuar sin registrarse")
-        }
-        // ---- INICIO BOTÓN DE PRUEBA ----
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        OutlinedButton(
-            onClick = {
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                    try {
-                        val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.probarConexion()
-                        if (respuesta.isSuccessful) {
-                            val datos = respuesta.body()
-                            Toast.makeText(
-                                context,
-                                "✅ Backend dice: ${datos?.mensaje} (${datos?.autor})",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            Toast.makeText(context, " Error HTTP: ${respuesta.code()}", Toast.LENGTH_LONG).show()
-                        }
-                    } catch (e: Exception) {
-                        Toast.makeText(context, " Fallo: ${e.message}", Toast.LENGTH_LONG).show()
-                        Log.e("RetrofitTest", "Error al conectar con backend", e)
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("🧪 Probar conexión con Backend")
+            Text("Continuar sin registrarse", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
         }
 
-        // ---- FIN BOTÓN DE PRUEBA ----
+        Spacer(modifier = Modifier.height(32.dp))
 
-
-
+        // 7. Pie de página
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Text("¿Aún no tienes cuenta? ", color = grayText, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = "Regístrate aquí",
+                color = primaryBlue,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.clickable { onIrARegistro() }
+            )
+        }
     }
 }
 
@@ -627,68 +669,171 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
 fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, String, String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
     var nombre by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var rolSeleccionado by remember { mutableStateOf("pasajero") }
     var expandido by remember { mutableStateOf(false) }
+    var cargando by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Crear Cuenta", style = MaterialTheme.typography.headlineMedium)
+    // Colores del Mockup
+    val primaryBlue = Color(0xFF2563EB)
+    val darkText = Color(0xFF1E293B)
+    val grayText = Color(0xFF64748B)
+    val tealBg = Color(0xFF14B8A6)
+    val lightGrayBg = Color(0xFFF8FAFC)
+    val cardBg = Color.White
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(lightGrayBg).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 1. Cabecera
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(40.dp).background(Color.White, shape = RoundedCornerShape(12.dp)).clickable { onVolverLogin() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = darkText)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text("Crear Cuenta", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = darkText))
+            Spacer(modifier = Modifier.weight(1.3f))
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // 2. Icono Teal de Usuario
+        Box(
+            modifier = Modifier.size(64.dp).background(tealBg, shape = RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = Icons.Filled.Person, contentDescription = "Usuario", tint = Color.White, modifier = Modifier.size(32.dp))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Empieza a moverte mejor", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = darkText))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Crea tu cuenta para guardar rutas y recibir alertas.", textAlign = TextAlign.Center, color = grayText, style = MaterialTheme.typography.bodySmall)
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre completo") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(value = correo, onValueChange = { correo = it }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(value = contrasena, onValueChange = { contrasena = it }, label = { Text("Contraseña") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
-        Spacer(modifier = Modifier.height(16.dp))
+        // 3. Tarjeta del Formulario
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                // Campo: Nombre
+                Text("Nombre completo", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = nombre, onValueChange = { nombre = it },
+                    placeholder = { Text("Tu nombre y apellido", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg, unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue)
+                )
 
-        // --- MENÚ DESPLEGABLE DE ROL ---
-        ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = { expandido = !expandido }) {
-            OutlinedTextField(
-                value = rolSeleccionado.replaceFirstChar { it.uppercase() },
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Selecciona tu Rol") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
-            )
-            ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
-                listOf("pasajero", "conductor").forEach { rol ->
-                    DropdownMenuItem(
-                        text = { Text(rol.replaceFirstChar { it.uppercase() }) },
-                        onClick = { rolSeleccionado = rol; expandido = false }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Campo: Correo
+                Text("Correo", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = correo, onValueChange = { correo = it },
+                    placeholder = { Text("tu@correo.com", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg, unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Campo: Contraseña
+                Text("Contraseña", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = contrasena, onValueChange = { contrasena = it },
+                    placeholder = { Text("Mínimo 8 caracteres", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg, unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- MENÚ DESPLEGABLE DE ROL (Mantenido de tu código) ---
+                Text("Tipo de Usuario", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = { expandido = !expandido }) {
+                    OutlinedTextField(
+                        value = rolSeleccionado.replaceFirstChar { it.uppercase() },
+                        onValueChange = {}, readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg, unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue)
                     )
+                    ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
+                        listOf("pasajero", "conductor").forEach { rol ->
+                            DropdownMenuItem(
+                                text = { Text(rol.replaceFirstChar { it.uppercase() }) },
+                                onClick = { rolSeleccionado = rol; expandido = false }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Botón Registrarse (Conectado a Render)
+                Button(
+                    onClick = {
+                        if (correo.isNotEmpty() && contrasena.isNotEmpty() && nombre.isNotEmpty()) {
+                            cargando = true
+                            scope.launch {
+                                try {
+                                    val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.registrar(
+                                        com.ranger.popabus.network.RegisterRequest(correo, contrasena, nombre, rolSeleccionado)
+                                    )
+                                    if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
+                                        val datos = respuesta.body()!!
+                                        Toast.makeText(context, "Cuenta creada: ${datos.nombre_completo}", Toast.LENGTH_LONG).show()
+                                        onRegistroExitoso(datos.uid, datos.nombre_completo, datos.rol)
+                                    } else {
+                                        cargando = false
+                                        Toast.makeText(context, "Error: ${respuesta.code()}", Toast.LENGTH_LONG).show()
+                                    }
+                                } catch (e: Exception) {
+                                    cargando = false
+                                    Toast.makeText(context, "Error de red: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(context, "Llena todos los campos", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
+                    enabled = !cargando
+                ) {
+                    Text(if (cargando) "Registrando..." else "Registrarse", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
-            onClick = {
-                if (correo.isNotEmpty() && contrasena.isNotEmpty() && nombre.isNotEmpty()) {
-                    scope.launch {
-                        try {
-                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.registrar(
-                                com.ranger.popabus.network.RegisterRequest(correo, contrasena, nombre, rolSeleccionado)
-                            )
-                            if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
-                                val datos = respuesta.body()!!
-                                Toast.makeText(context, "Cuenta creada: ${datos.nombre_completo}", Toast.LENGTH_LONG).show()
-                                onRegistroExitoso(datos.uid, datos.nombre_completo, datos.rol)
-                            }
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Error de red", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Registrarme") }
-
-        TextButton(onClick = onVolverLogin) { Text("¿Ya tienes cuenta? Inicia sesión aquí") }
+        Row(horizontalArrangement = Arrangement.Center) {
+            Text("¿Ya tienes una cuenta? ", color = grayText, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = "Volver al Login",
+                color = primaryBlue, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.clickable { onVolverLogin() }
+            )
+        }
     }
 }
 
@@ -960,30 +1105,34 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
-    // Estados de datos
+    // --- ESTADOS DEL MAPA Y DATOS ---
     var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
     var rutasOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.RutaRespuesta>>(emptyList()) }
     var paraderosOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.ParaderoRespuesta>>(emptyList()) }
     val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
 
-    // ESTADOS DE LA UI (Como en la foto)
+    var ubicacionPasajero by remember { mutableStateOf<LatLng?>(null) }
     var rutaSeleccionada by remember { mutableStateOf<com.ranger.popabus.network.RutaRespuesta?>(null) }
-    var textoBusqueda by remember { mutableStateOf("") }
+    var mostrarRutas by remember { mutableStateOf(true) }
 
-    // Estado del panel inferior (BottomSheet)
-    val scaffoldState = rememberBottomSheetScaffoldState(
-        bottomSheetState = rememberStandardBottomSheetState(
-            initialValue = SheetValue.PartiallyExpanded,
-            skipHiddenState = false
-        )
-    )
+    // --- ESTADOS DE LA UI (Menú y SOS) ---
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
+    var rastreandoAbordaje by remember { mutableStateOf(false) }
+    var mostrarDialogoPanico by remember { mutableStateOf(false) }
+
+    // --- NUEVOS ESTADOS PARA EL BUSCADOR INTELIGENTE ---
+    var textoBusqueda by remember { mutableStateOf("") }
+    var menuSugerenciasExpandido by remember { mutableStateOf(false) }
+    var paraderoSeleccionadoBusqueda by remember { mutableStateOf<com.ranger.popabus.network.ParaderoRespuesta?>(null) }
+    val focusManager = LocalFocusManager.current
 
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(popayan, 14f)
     }
 
-    // Permisos
+    // --- PERMISOS ---
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permisos ->
@@ -992,6 +1141,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
                         val miUbicacion = LatLng(location.latitude, location.longitude)
+                        ubicacionPasajero = miUbicacion
                         coroutineScope.launch {
                             cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(miUbicacion, 16f), 2000)
                         }
@@ -1005,7 +1155,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    // MOTOR DE DATOS (Buses, Rutas, Paraderos)
+    // --- MOTOR DE DATOS (Buses, Rutas, Paraderos desde Render) ---
     LaunchedEffect(Unit) {
         while (true) {
             try {
@@ -1031,7 +1181,19 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     }
 
-    // Convertir el texto JSON de la geometría a LatLng para dibujar la línea
+    // --- LÓGICA DEL BUSCADOR INTELIGENTE ---
+    val sugerenciasParaderos = if (textoBusqueda.isNotBlank()) {
+        paraderosOficiales.filter { it.nombre.contains(textoBusqueda, ignoreCase = true) }.take(4)
+    } else emptyList()
+
+    val sugerenciasRutas = if (textoBusqueda.isNotBlank()) {
+        rutasOficiales.filter {
+            it.nombre_ruta.contains(textoBusqueda, ignoreCase = true) ||
+                    it.origen.contains(textoBusqueda, ignoreCase = true) ||
+                    it.destino.contains(textoBusqueda, ignoreCase = true)
+        }.take(4)
+    } else emptyList()
+
     val puntosRutaSeleccionada = remember(rutaSeleccionada) {
         if (rutaSeleccionada != null && rutaSeleccionada!!.geometria.isNotEmpty()) {
             try {
@@ -1044,168 +1206,171 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-    // --- DISEÑO TIPO GOOGLE MAPS ---
-    BottomSheetScaffold(
-        scaffoldState = scaffoldState,
-        sheetPeekHeight = if (rutaSeleccionada != null) 180.dp else 0.dp, // Se oculta si no hay ruta
-        sheetContent = {
-            if (rutaSeleccionada != null) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(text = rutaSeleccionada!!.nombre_ruta, style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "De: ${rutaSeleccionada!!.origen} ➔ A: ${rutaSeleccionada!!.destino}", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                Toast.makeText(context, "¡Buen viaje!", Toast.LENGTH_SHORT).show()
-                                rutaSeleccionada = null // Cierra el panel
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E8E3E)) // Verde de Google
-                        ) {
-                            Text("▶ Empezar")
-                        }
-                        OutlinedButton(
-                            onClick = { Toast.makeText(context, "Añadido a favoritos", Toast.LENGTH_SHORT).show() },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("⭐ Favorito")
-                        }
-                    }
-                }
+    // --- DISEÑO GENERAL ---
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text("Ayuda", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                NavigationDrawerItem(label = { Text("Sugerencias") }, selected = false, onClick = { vistaAyudaActual = "SUGERENCIAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                NavigationDrawerItem(label = { Text("Actividad (Historial)") }, icon = { Text("⏱️") }, selected = false, onClick = { vistaAyudaActual = "ACTIVIDAD"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
             }
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-
-            // 1. MAPA
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-                properties = mapProperties
-            ) {
-                // Dibujar la ruta seleccionada en ROJO
-                if (puntosRutaSeleccionada.isNotEmpty()) {
-                    com.google.maps.android.compose.Polyline(
-                        points = puntosRutaSeleccionada,
-                        color = Color.Red,
-                        width = 18f
-                    )
-                }
-
-                // Dibujar paraderos de la ruta
+    ) {
+        BottomSheetScaffold(
+            scaffoldState = rememberBottomSheetScaffoldState(
+                bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded, skipHiddenState = false)
+            ),
+            sheetPeekHeight = if (rutaSeleccionada != null) 180.dp else 0.dp,
+            sheetContent = {
                 if (rutaSeleccionada != null) {
-                    paraderosOficiales.forEach { paradero ->
-                        Marker(
-                            state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)),
-                            title = paradero.nombre,
-                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
-                        )
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(text = rutaSeleccionada!!.nombre_ruta, style = MaterialTheme.typography.titleLarge)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(text = "De: ${rutaSeleccionada!!.origen} ➔ A: ${rutaSeleccionada!!.destino}", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { Toast.makeText(context, "¡Buen viaje!", Toast.LENGTH_SHORT).show(); rutaSeleccionada = null }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E8E3E))) { Text("▶ Empezar") }
+                            OutlinedButton(onClick = { }, modifier = Modifier.weight(1f)) { Text("⭐ Favorito") }
+                        }
                     }
                 }
-
-                // Dibujar buses
-                busesEnZona.forEach { (idBus, destino) ->
-                    key(idBus) {
-                        MarcadorBusAnimado(idBus, destino, iconoBus, "Buscando...")
-                    }
-                }
-            }
-
-            // 2. BARRA SUPERIOR (Si hay ruta seleccionada)
-            if (rutaSeleccionada != null) {
+            },
+            topBar = {
                 TopAppBar(
-                    title = { Text(rutaSeleccionada!!.nombre_ruta) },
+                    title = { Text(if (rutaSeleccionada != null) rutaSeleccionada!!.nombre_ruta else "") },
                     navigationIcon = {
-                        IconButton(onClick = { rutaSeleccionada = null }) {
-                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Volver")
+                        IconButton(onClick = {
+                            if (rutaSeleccionada != null) rutaSeleccionada = null
+                            else coroutineScope.launch { drawerState.open() }
+                        }) {
+                            Icon(imageVector = if (rutaSeleccionada != null) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, contentDescription = "Menu")
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White.copy(alpha = 0.9f))
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
-            } else {
-                // 3. BARRA DE BÚSQUEDA (Si no hay ruta seleccionada)
-                Column(
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.92f),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            },
+            containerColor = Color.Transparent
+        ) { paddingValues ->
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+
+                // 1. MAPA
+                GoogleMap(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraPositionState = cameraPositionState,
+                    properties = mapProperties
                 ) {
-                    OutlinedTextField(
-                        value = textoBusqueda,
-                        onValueChange = { textoBusqueda = it },
-                        label = { Text("¿A dónde vas?") },
-                        modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(12.dp)),
-                        singleLine = true
-                    )
+                    if (mostrarRutas && puntosRutaSeleccionada.isNotEmpty()) {
+                        com.google.maps.android.compose.Polyline(points = puntosRutaSeleccionada, color = Color.Red, width = 18f)
+                    }
 
-                    // Lista flotante de resultados
-                    if (textoBusqueda.isNotBlank()) {
-                        val rutasEncontradas = rutasOficiales.filter { it.nombre_ruta.contains(textoBusqueda, true) || it.origen.contains(textoBusqueda, true) || it.destino.contains(textoBusqueda, true) }
+                    if (rutaSeleccionada != null) {
+                        paraderosOficiales.forEach { paradero ->
+                            Marker(state = MarkerState(position = LatLng(paradero.latitud, paradero.longitud)), title = paradero.nombre, icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                        }
+                    }
 
-                        Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            LazyColumn {
-                                items(rutasEncontradas) { ruta ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().clickable {
-                                            rutaSeleccionada = ruta
-                                            textoBusqueda = ""
+                    busesEnZona.forEach { (idBus, destino) ->
+                        key(idBus) {
+                            MarcadorBusAnimado(idBus, destino, iconoBus, "Calculando...")
+                        }
+                    }
+                }
 
-                                            // Zoom a la ruta
-                                            if (ruta.geometria.isNotEmpty()) {
-                                                try {
-                                                    val type = object : com.google.gson.reflect.TypeToken<List<CoordenadaRuta>>() {}.type
-                                                    val puntos: List<CoordenadaRuta> = com.google.gson.Gson().fromJson(ruta.geometria, type)
-                                                    if (puntos.isNotEmpty()) {
-                                                        coroutineScope.launch {
-                                                            cameraPositionState.animate(
-                                                                CameraUpdateFactory.newLatLngZoom(LatLng(puntos.first().latitud, puntos.first().longitud), 14f), 1500
-                                                            )
-                                                        }
-                                                    }
-                                                } catch (e: Exception) {}
+                // 2. BUSCADOR INTELIGENTE (El de tu amigo)
+                if (rutaSeleccionada == null) {
+                    Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.92f).zIndex(2f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        OutlinedTextField(
+                            value = textoBusqueda,
+                            onValueChange = { textoBusqueda = it; menuSugerenciasExpandido = true },
+                            label = { Text("¿A dónde vas?") },
+                            modifier = Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.95f), RoundedCornerShape(12.dp)),
+                            singleLine = true,
+                            trailingIcon = {
+                                if (textoBusqueda.isNotEmpty()) {
+                                    IconButton(onClick = { textoBusqueda = ""; menuSugerenciasExpandido = false }) { Text("❌") }
+                                }
+                            }
+                        )
+
+                        if (menuSugerenciasExpandido && (sugerenciasParaderos.isNotEmpty() || sugerenciasRutas.isNotEmpty())) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
+                            ) {
+                                LazyColumn(modifier = Modifier.heightIn(max = 220.dp)) {
+                                    items(sugerenciasParaderos) { paradero ->
+                                        DropdownMenuItem(
+                                            text = { Text("📍 Paradero: ${paradero.nombre}") },
+                                            onClick = {
+                                                textoBusqueda = paradero.nombre
+                                                menuSugerenciasExpandido = false
+                                                paraderoSeleccionadoBusqueda = paradero
+                                                val rutaEncontrada = rutasOficiales.find { it.id == paradero.id_ruta }
+                                                if (rutaEncontrada != null) rutaSeleccionada = rutaEncontrada
+                                                focusManager.clearFocus()
+                                                coroutineScope.launch { cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(paradero.latitud, paradero.longitud), 16f)) }
                                             }
-                                        }.padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(ruta.nombre_ruta, style = MaterialTheme.typography.titleMedium)
-                                        Text("Ver 📍")
+                                        )
+                                    }
+                                    items(sugerenciasRutas) { ruta ->
+                                        DropdownMenuItem(
+                                            text = { Text("🚌 Ruta: ${ruta.nombre_ruta}") },
+                                            onClick = {
+                                                textoBusqueda = ""
+                                                menuSugerenciasExpandido = false
+                                                rutaSeleccionada = ruta
+                                                focusManager.clearFocus()
+                                                if (ruta.geometria.isNotEmpty()) {
+                                                    try {
+                                                        val type = object : com.google.gson.reflect.TypeToken<List<CoordenadaRuta>>() {}.type
+                                                        val puntos: List<CoordenadaRuta> = com.google.gson.Gson().fromJson(ruta.geometria, type)
+                                                        if (puntos.isNotEmpty()) {
+                                                            coroutineScope.launch { cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(puntos.first().latitud, puntos.first().longitud), 14f)) }
+                                                        }
+                                                    } catch (e: Exception) {}
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // 4. BOTONES FLOTANTES
-            Column(
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = { },
-                    containerColor = Color(0xFF1E88E5),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Text("🔗", color = Color.White)
-                }
-                FloatingActionButton(
-                    onClick = { },
-                    containerColor = Color(0xFF8E24AA),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Text("🎫", color = Color.White)
-                }
-            }
+                // 3. BOTONES FLOTANTES (SOS y Abordaje)
+                if (rutaSeleccionada == null) {
+                    FloatingActionButton(
+                        onClick = { mostrarDialogoPanico = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 96.dp, end = 16.dp),
+                        containerColor = Color.Red
+                    ) { Text("SOS", color = Color.White) }
 
-            // Botón de Cerrar Sesión
-            Button(
-                onClick = onCerrarSesion,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-            ) {
-                Text("Salir")
+                    Button(
+                        onClick = {
+                            rastreandoAbordaje = !rastreandoAbordaje
+                            val intentRastreo = Intent(context, ServicioRastreoPasajero::class.java)
+                            if (rastreandoAbordaje) ContextCompat.startForegroundService(context, intentRastreo)
+                            else context.stopService(intentRastreo)
+                        },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 32.dp, start = 16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray)
+                    ) { Text(if (rastreandoAbordaje) "⏹️ Detener" else "✅ Abordaje") }
+                }
+
+                // Botón de Cerrar Sesión
+                Button(
+                    onClick = onCerrarSesion,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) { Text("Salir") }
             }
         }
     }
