@@ -117,6 +117,17 @@ data class RutaRespuesta(
     val estado: String = "activa",
     val geometria: String = "[]"
 )
+// Agrega este data class junto a los demás:
+data class ActividadRespuesta(
+    val id: String = "",
+    val id_usuario: String,
+    val id_bus: String,
+    val id_ruta: String,
+    val fecha_abordaje: Long,
+    val metodo_registro: String = "manual"
+)
+
+
 
 
 interface ApiService {
@@ -171,5 +182,10 @@ interface ApiService {
 
     @DELETE("/api/rutas/{id}")
     suspend fun eliminarRuta(@Path("id") id: String): Response<Map<String, String>>
+
+    @GET("/api/actividades/{uid}")
+    suspend fun obtenerActividades(@Path("uid") uid: String): Response<List<ActividadRespuesta>>
+    @POST("/api/actividades")
+    suspend fun crearActividad(@Body actividad: ActividadRespuesta): Response<Map<String, String>>
 
 }

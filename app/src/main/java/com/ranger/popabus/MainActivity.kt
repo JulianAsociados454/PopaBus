@@ -231,6 +231,99 @@ data class HistorialBusquedaOficial(
     val rutas_resultado: Map<String, Boolean> = emptyMap(),
     val fecha_busqueda: Long = 0L
 )
+// --- MODELO QUE FALTABA ---
+data class ActividadUsuario(
+    val id_actividad: String = "",
+    val id_bus: String = "",
+    val id_ruta: String = "",
+    val fecha_abordaje: Long = 0L,
+    val metodo_registro: String = "manual"
+)
+
+// --- FUNCIONES VISUALES QUE SE BORRARON ---
+@Composable
+fun VistaAcercaDe(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Acerca de POPABUS", style = MaterialTheme.typography.titleLarge) },
+        text = { Text("POPABUS es una plataforma de movilidad para la ciudad de Popayán.") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+    )
+}
+
+@Composable
+fun VistaPreguntasFrecuentes(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Preguntas Frecuentes", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column {
+                Text("¿Cómo busco una ruta?", color = MaterialTheme.colorScheme.primary)
+                Text("Usa la barra de búsqueda superior.")
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("¿Cómo reporto un problema?", color = MaterialTheme.colorScheme.primary)
+                Text("Toca el botón 'Reportar' en el mapa.")
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+    )
+}
+
+@Composable
+fun VistaSugerencias(onDismiss: () -> Unit) {
+    var sugerencia by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Buzón de Sugerencias", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            OutlinedTextField(
+                value = sugerencia,
+                onValueChange = { sugerencia = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Tu sugerencia...") }
+            )
+        },
+        confirmButton = {
+            Button(onClick = { onDismiss() }) { Text("Enviar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+@Composable
+fun VistaActividad(listaActividades: List<ActividadUsuario>, hayInternet: Boolean, onDismiss: () -> Unit = {}) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Historial de Abordajes", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            if (listaActividades.isEmpty()) {
+                Text("Aún no tienes actividad reciente")
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listaActividades) { actividad ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Bus: ${actividad.id_bus}", style = MaterialTheme.typography.titleMedium)
+                                Text("Ruta: ${actividad.id_ruta}", style = MaterialTheme.typography.bodyMedium)
+                                val fechaFormateada = remember(actividad.fecha_abordaje) {
+                                    val sdf = java.text.SimpleDateFormat("dd/MM/yyyy hh:mm a", java.util.Locale.getDefault())
+                                    sdf.format(java.util.Date(actividad.fecha_abordaje))
+                                }
+                                Text("Fecha: $fechaFormateada", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+    )
+}
 
 
 
@@ -1114,6 +1207,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     var ubicacionPasajero by remember { mutableStateOf<LatLng?>(null) }
     var rutaSeleccionada by remember { mutableStateOf<com.ranger.popabus.network.RutaRespuesta?>(null) }
     var mostrarRutas by remember { mutableStateOf(true) }
+    val auth = remember { FirebaseAuth.getInstance() }
 
     // --- ESTADOS DE LA UI (Menú y SOS) ---
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -1371,6 +1465,46 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
                 ) { Text("Salir") }
+                // --- INYECCIÓN DE LAS VISTAS DE AYUDA (Se superponen al mapa) ---
+                if (vistaAyudaActual == "ACERCA") {
+                    VistaAcercaDe(onDismiss = { vistaAyudaActual = null })
+                } else if (vistaAyudaActual == "PREGUNTAS") {
+                    VistaPreguntasFrecuentes(onDismiss = { vistaAyudaActual = null })
+                } else if (vistaAyudaActual == "SUGERENCIAS") {
+                    VistaSugerencias(onDismiss = { vistaAyudaActual = null })
+                } else if (vistaAyudaActual == "ACTIVIDAD") {
+                    var listaActividades by remember { mutableStateOf<List<com.ranger.popabus.network.ActividadRespuesta>>(emptyList()) }
+
+                    LaunchedEffect(Unit) {
+                        try {
+                            val uid = auth.currentUser?.uid ?: "anonimo"
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerActividades(uid)
+                            if (respuesta.isSuccessful) {
+                                listaActividades = respuesta.body() ?: emptyList()
+                            }
+                        } catch (e: Exception) {
+                            Log.e("Historial", "Error al leer historial de Render: ${e.message}")
+                        }
+                    }
+
+                    val actividadesAdaptadas = listaActividades.map {
+                        ActividadUsuario(
+                            id_actividad = it.id,
+                            id_bus = it.id_bus,
+                            id_ruta = it.id_ruta,
+                            fecha_abordaje = it.fecha_abordaje,
+                            metodo_registro = it.metodo_registro
+                        )
+                    }
+
+                    VistaActividad(
+                        listaActividades = actividadesAdaptadas,
+                        hayInternet = true,
+                        onDismiss = { vistaAyudaActual = null }
+                    )
+                }
+                // -----------------------------------------------------------------
+
             }
         }
     }
