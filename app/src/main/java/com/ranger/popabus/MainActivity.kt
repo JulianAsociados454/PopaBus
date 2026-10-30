@@ -9,101 +9,89 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.location.Location
 import android.os.Bundle
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.Dash
+import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
-
+import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.*
 import com.ranger.popabus.ui.theme.PopaBusTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Person
-
-
-
-
-import androidx.compose.foundation.BorderStroke
-
-import com.google.firebase.auth.GoogleAuthProvider
-
-
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialException
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-
-
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
-
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-
-
-import androidx.credentials.CustomCredential
-import com.google.firebase.database.ServerValue
-import androidx.compose.ui.text.withStyle
-
-
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-
-
-
-
 
 
 // Representa la ubicación en tiempo real (BusesActivos)
@@ -305,17 +293,38 @@ fun MarcadorBusAnimado(
     icono: BitmapDescriptor?,
     textoEta: String // <-- NUEVO SPRINT 9: Recibimos el texto predictivo
 ) {
-    // Memoria individual para cada bus
+    // La ubicación interpolada actual que se dibuja en pantalla
     var ubicacionActual by remember { mutableStateOf(destinoLatLng) }
+    
+    // Los "puntos clave" o esquinas consolidadas desde Firebase
+    var puntosClave by remember { mutableStateOf(listOf(destinoLatLng)) }
 
     LaunchedEffect(destinoLatLng) {
         if (ubicacionActual != destinoLatLng) {
+            // Guardamos la posición desde la que arranca el bus en este nuevo tramo
+            val puntoInicial = ubicacionActual
+            if (puntosClave.lastOrNull() != puntoInicial) {
+                puntosClave = puntosClave + puntoInicial
+            }
+
             animarMarcador(
-                posicionActual = ubicacionActual,
+                posicionActual = puntoInicial,
                 posicionDestino = destinoLatLng,
                 onProgress = { ubicacionActual = it }
             )
         }
+    }
+
+    // El rastro es la historia consolidada + la posición exacta interpolada en este nanosegundo
+    val rastroCompleto = puntosClave + ubicacionActual
+
+    if (rastroCompleto.size > 1) {
+        com.google.maps.android.compose.Polyline(
+            points = rastroCompleto,
+            color = Color(0xFF00C853), // Color verde fuerte para la estela real
+            width = 16f,
+            zIndex = 1.5f
+        )
     }
 
     Marker(
@@ -430,7 +439,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PopaBusTheme {
 // Evolución: El estado inicial ahora es el Splash[cite: 4]
-                var pantallaActual by remember { mutableStateOf("SPLASH") }
+                var pantallaActual by rememberSaveable { mutableStateOf("SPLASH") }
 
                 when (pantallaActual) {
                     "SPLASH" -> PantallaSplash(onSplashTerminado = { pantallaActual = "LOGIN" })
@@ -938,7 +947,6 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
 }
 
 
-
 @SuppressLint("MissingPermission")
 @Composable
 fun PantallaConductor(onCerrarSesion: () -> Unit) {
@@ -963,7 +971,6 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 
     // Guarda el ID del viaje generado por Firebase
     var idRecorridoActual by remember { mutableStateOf<String?>(null) }
-    // Solicitud de permisos
 
     // --- NUEVO SPRINT 10: CÁMARA DEL MAPA TÁCTICO ---
     val popayan = LatLng(2.4419, -76.6063)
@@ -972,21 +979,22 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     }
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-
     // --- NUEVO SPRINT 10: ESTADOS PARA LOS COMPAÑEROS DE RUTA ---
     var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
     // --- NUEVO SPRINT 10: ESTADOS PARA INCIDENCIAS ---
     var incidenciasActivas by remember { mutableStateOf<List<IncidenciaOficial>>(emptyList()) }
     val iconoBus = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
 
-
-
+    // Estado para la geometría de la ruta ideal
+    var rutaIdeal by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+    // Estado para el trazo real recorrido
+    var rutaRecorrida by remember { mutableStateOf<List<LatLng>>(emptyList()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permisos ->
-            permisoConcedido = (permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true) || 
-                           (permisos[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+            permisoConcedido = (permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
+                    (permisos[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
         }
     )
 
@@ -997,6 +1005,56 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
         )
     }
 
+    // --- LECTURA DE LA RUTA IDEAL (Línea punteada) ---
+    LaunchedEffect(Unit) {
+        val uid = auth.currentUser?.uid ?: return@LaunchedEffect
+        val refBuses = database.getReference("buses")
+        refBuses.orderByChild("id_conductor_actual").equalTo(uid).get().addOnSuccessListener { snapshot ->
+            if (snapshot.exists()) {
+                val busSnapshot = snapshot.children.first()
+                val rutaIdReal = busSnapshot.child("id_ruta").getValue(String::class.java) ?: return@addOnSuccessListener
+
+                // Buscar la geometría de esta ruta en la colección "rutas"
+                database.getReference("rutas").child(rutaIdReal).child("geometria").get().addOnSuccessListener { geoSnapshot ->
+                    if (geoSnapshot.exists()) {
+                        val puntos = geoSnapshot.children.mapNotNull { puntoSnap ->
+                            val latObj = puntoSnap.child("latitud").value
+                            val lngObj = puntoSnap.child("longitud").value
+                            val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull()
+                            val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull()
+                            if (lat != null && lng != null) LatLng(lat, lng) else null
+                        }
+                        rutaIdeal = puntos
+                    }
+                }
+            }
+        }
+    }
+
+    // --- ESCUCHA DEL GPS REAL DEL CONDUCTOR (Para el trazo azul sólido) ---
+    DisposableEffect(enRecorrido) {
+        var locationCallback: LocationCallback? = null
+        if (enRecorrido && permisoConcedido) {
+            val locationRequest = com.google.android.gms.location.LocationRequest.Builder(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, 3000L).build()
+
+            locationCallback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    locationResult.lastLocation?.let { location ->
+                        val nuevaPos = LatLng(location.latitude, location.longitude)
+                        rutaRecorrida = rutaRecorrida + nuevaPos
+                        // Opcional: centrar la cámara en el bus mientras se mueve
+                        /*
+                        cameraPositionState.position = CameraPosition.fromLatLngZoom(nuevaPos, 16f)
+                        */
+                    }
+                }
+            }
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+        }
+        onDispose {
+            locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
+        }
+    }
 
     // --- NUEVO SPRINT 10: MOTOR DE RADAR (ESCUCHA A LOS COMPAÑEROS) ---
     DisposableEffect(Unit) {
@@ -1014,29 +1072,22 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                 val busesRecibidos = mutableMapOf<String, LatLng>()
                 for (busSnapshot in snapshot.children) {
                     val idBus = busSnapshot.key ?: continue
-
                     val latObj = busSnapshot.child("latitud").value
                     val lngObj = busSnapshot.child("longitud").value
-
                     val lat = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull()
                     val lng = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull()
-
                     if (lat != null && lng != null) {
                         busesRecibidos[idBus] = LatLng(lat, lng)
                     }
                 }
                 busesEnZona = busesRecibidos
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("Firebase", "Error en radar del conductor", error.toException())
-            }
+            override fun onCancelled(error: DatabaseError) {}
         }
         query.addValueEventListener(listener)
         onDispose { query.removeEventListener(listener) }
     }
 
-    // MOTOR DE TRANSMISIÓN: Se activa cuando 'transmitiendo' es true
-// MOTOR DE TRANSMISIÓN: Se activa cuando 'transmitiendo' es true
     // --- NUEVO SPRINT 10: MOTOR DE ALERTAS EN LA VÍA ---
     DisposableEffect(Unit) {
         val refIncidencias = FirebaseDatabase.getInstance().getReference("incidencias")
@@ -1045,7 +1096,6 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                 val alertas = mutableListOf<IncidenciaOficial>()
                 for (hijo in snapshot.children) {
                     val inc = hijo.getValue(IncidenciaOficial::class.java)
-                    // Solo mostramos las alertas que estén pendientes y tengan coordenadas
                     if (inc != null && inc.estado == "pendiente" && inc.latitud != 0.0) {
                         alertas.add(inc)
                     }
@@ -1058,68 +1108,169 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
         onDispose { refIncidencias.removeEventListener(listenerAlertas) }
     }
 
-
-
-
-
-
-
-// --- NUEVA UI TÁCTICA DEL CONDUCTOR (SPRINT 10) ---
+    // --- NUEVA UI TÁCTICA DEL CONDUCTOR (SPRINT 10 REDISEÑO) ---
     Box(modifier = Modifier.fillMaxSize()) {
 
-// 1. EL MAPA DE FONDO
+        // 1. EL MAPA DE FONDO
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = mapProperties
         ) {
-            // --- NUEVO SPRINT 10: DIBUJAR A LOS COMPAÑEROS ---
+            // Dibujar la ruta ideal cortada (Dashed)
+            if (rutaIdeal.isNotEmpty()) {
+                com.google.maps.android.compose.Polyline(
+                    points = rutaIdeal,
+                    color = Color(0xFF6396E3), // Color azul claro/grisáceo
+                    width = 10f,
+                    pattern = listOf(Dash(20f), Gap(20f)) // Efecto línea punteada
+                )
+            }
+
+            // Dibujar el trazo recorrido (Línea continua)
+            if (rutaRecorrida.isNotEmpty()) {
+                com.google.maps.android.compose.Polyline(
+                    points = rutaRecorrida,
+                    color = Color(0xFF2563EB), // Azul oscuro sólido
+                    width = 16f
+                )
+            }
+
             busesEnZona.forEach { (idBus, destino) ->
                 key(idBus) {
-                    // Reutilizamos el componente inteligente del Sprint 9
                     MarcadorBusAnimado(
                         idBus = idBus,
                         destinoLatLng = destino,
                         icono = iconoBus,
-                        textoEta = "Compañero" // Para el conductor, solo es un indicador de que es otro bus
+                        textoEta = "Compañero"
                     )
                 }
             }
-            // --- NUEVO SPRINT 10: DIBUJAR INCIDENCIAS EN LA VÍA ---
+
             incidenciasActivas.forEach { incidencia ->
                 Marker(
                     state = MarkerState(position = LatLng(incidencia.latitud, incidencia.longitud)),
                     title = "⚠️ Alerta Reportada",
                     snippet = incidencia.descripcion,
-                    // Usamos un pin color naranja para que el conductor lo distinga de los paraderos
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
                 )
             }
         }
 
-        // 2. PANEL DE CONTROL FLOTANTE (Abajo)
+        // 2. INDICADOR DE ESTADO SUPERIOR (Píldora)
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = 48.dp, start = 16.dp, end = 16.dp), // Ajuste por status bar
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Aquí iría tu logo de PopaBus
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF2563EB),
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Popa", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B), fontSize = 20.sp)
+                Text("Bus", fontWeight = FontWeight.Bold, color = Color(0xFF0D9488), fontSize = 20.sp)
+            }
+
+            // Píldora de estado
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(if (enRecorrido) Color(0xFF2563EB) else Color(0xFF0D9488), CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (enRecorrido) "En recorrido" else "Disponible",
+                        color = if (enRecorrido) Color(0xFF2563EB) else Color(0xFF0D9488),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        // 3. PANEL DE CONTROL FLOTANTE (Abajo con bordes muy redondeados)
         Card(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.Start
             ) {
-                Text(
-                    text = if (!enRecorrido) "Panel Táctico" else "🟢 Viaje en Curso",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = if (!enRecorrido) Color.Black else Color(0xFF006400) // Verde oscuro si está en viaje
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "LÍNEA 4 • BUS PB-024", // Dinamizar con datos reales
+                            color = Color.Gray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (!enRecorrido) "Listo para conducir" else "Recorrido en curso",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1E293B)
+                        )
+                    }
 
-                // LÓGICA VISUAL DEL RECORRIDO (Tus botones originales)
+                    // Reloj pequeño simulado
+                    Surface(
+                        color = Color(0xFFF1F5F9),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        var horaActual by remember { mutableStateOf("") }
+                        LaunchedEffect(Unit) {
+                            while (true) {
+                                val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                                horaActual = sdf.format(java.util.Date())
+                                kotlinx.coroutines.delay(1000)
+                            }
+                        }
+                        Text(
+                            text = if (horaActual.isEmpty()) "00:00" else horaActual,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // BOTÓN DE ACCIÓN PRINCIPAL
                 if (!enRecorrido) {
-// Botón para INICIAR
                     Button(
                         onClick = {
                             if (!permisoConcedido) {
@@ -1130,13 +1281,8 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                             val uid = auth.currentUser?.uid ?: "CONDUCTOR_DESCONOCIDO"
                             val refBuses = database.getReference("buses")
 
-                            Log.e("DepuradorBuses", "INICIANDO CONSULTA: Buscando id_conductor_actual == [$uid]")
-
                             refBuses.orderByChild("id_conductor_actual").equalTo(uid).get().addOnSuccessListener { snapshot ->
-                                Log.e("DepuradorBuses", "RESPUESTA FIREBASE: snapshot.exists() = ${snapshot.exists()}, childrenCount = ${snapshot.childrenCount}")
-                                
                                 if (snapshot.exists()) {
-                                    // Encontramos el bus asignado al conductor
                                     val busSnapshot = snapshot.children.first()
                                     val busIdReal = busSnapshot.key ?: "BUS_DESCONOCIDO"
                                     val rutaIdReal = busSnapshot.child("id_ruta").getValue(String::class.java) ?: "RUTA_DESCONOCIDA"
@@ -1158,39 +1304,23 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                         idRecorridoActual = idGenerado
                                         enRecorrido = true
                                         transmitiendo = true
-                                        ultimaUbicacion = "Transmitiendo en 2do plano... 🛡️"
+                                        rutaRecorrida = emptyList() // Reiniciar trazo
                                         horaInicioViaje = System.currentTimeMillis()
                                         contadorAlertas = 0
 
-                                        try {
-                                            val intent = Intent(context, ServicioGpsConductor::class.java)
-                                            intent.putExtra("ID_RECORRIDO", idGenerado)
-                                            intent.putExtra("ID_BUS", busIdReal)
-                                            ContextCompat.startForegroundService(context, intent)
-
-                                            Toast.makeText(context, "Viaje Oficial Iniciado", Toast.LENGTH_SHORT).show()
-                                        } catch (e: Exception) {
-                                            Log.e("DepuradorBuses", "Crash evitado al iniciar Foreground Service", e)
-                                            Toast.makeText(context, "No se pudo iniciar el servicio GPS.", Toast.LENGTH_LONG).show()
-                                        }
+                                        val intent = Intent(context, ServicioGpsConductor::class.java)
+                                        intent.putExtra("ID_RECORRIDO", idGenerado)
+                                        intent.putExtra("ID_BUS", busIdReal)
+                                        ContextCompat.startForegroundService(context, intent)
                                     }
-                                } else {
-                                    Log.e("DepuradorBuses", "RESULTADO CERO: Firebase dice que no existe un bus con conductor = [$uid]")
-                                    Toast.makeText(context, "0 resultados encontrados para este conductor.", Toast.LENGTH_LONG).show()
                                 }
-                            }.addOnFailureListener { excepcion ->
-                                Log.e("DepuradorBuses", "FALLO CATASTRÓFICO BASE DE DATOS", excepcion)
-                                Toast.makeText(context, "Fallo: ${excepcion.message}", Toast.LENGTH_LONG).show()
                             }
                         },
-                        enabled = true,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        Text("▶️ Iniciar Recorrido Oficial")
+                        Text("▶  Iniciar Recorrido Oficial", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 } else {
                     Button(
@@ -1199,20 +1329,10 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                 val uidConductor = auth.currentUser?.uid ?: "desconocido"
                                 val tiempoActual = System.currentTimeMillis()
 
-                                // 1. CERRAR EL VIAJE ORIGINAL (Para no dañar el historial)
                                 val refRecorrido = database.getReference("recorridos").child(idRecorridoActual!!)
-                                val actualizaciones = mapOf(
-                                    "hora_fin" to tiempoActual,
-                                    "estado" to "finalizado"
-                                )
-                                refRecorrido.updateChildren(actualizaciones)
+                                refRecorrido.updateChildren(mapOf("hora_fin" to tiempoActual, "estado" to "finalizado"))
 
-                                // 2. CÁLCULO MATEMÁTICO E INFORME DIARIO (Evitando división por cero o nulos)
-                                val minutosTotales = if (horaInicioViaje > 0L) {
-                                    (tiempoActual - horaInicioViaje) / 60000
-                                } else {
-                                    0L
-                                }
+                                val minutosTotales = if (horaInicioViaje > 0L) (tiempoActual - horaInicioViaje) / 60000 else 0L
 
                                 val nuevoInforme = InformeDiario(
                                     id_recorrido = idRecorridoActual!!,
@@ -1222,142 +1342,143 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                                     fecha_cierre = tiempoActual
                                 )
 
-                                // 3. ENVIAR EL INFORME A LA NUEVA COLECCIÓN
                                 database.getReference("informes_diarios").push().setValue(nuevoInforme)
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "Cierre exitoso. Informe generado.", Toast.LENGTH_LONG).show()
-                                    }
-
-                                // 4. APAGAR EL ESCUDO GPS NATIVO
                                 val intent = Intent(context, ServicioGpsConductor::class.java)
                                 context.stopService(intent)
                             }
-
-                            // 5. VACIAR LA MEMORIA LOCAL
                             enRecorrido = false
                             transmitiendo = false
-                            ultimaUbicacion = "Viaje finalizado."
                             idRecorridoActual = null
                             horaInicioViaje = 0L
                             contadorAlertas = 0
+                            rutaRecorrida = emptyList() // Limpiar trazo
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488)), // Verde para detenido
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        Text("🛑 Finalizar Recorrido")
+                        Text("▶  Recorrido Oficial Iniciado", fontWeight = FontWeight.Bold, fontSize = 16.sp) // Texto simulando tu imagen 2
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // --- PANEL DE REPORTES DEL CONDUCTOR ---
-                Text("Reportar Incidencia en la Vía", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = {
-                                contadorAlertas++
-                                val uid = auth.currentUser?.uid ?: ""
-                                val nuevaIncidencia = IncidenciaOficial(
-                                    id_usuario = uid,
-                                    descripcion = "Trancón",
-                                    estado = "pendiente",
-                                    fecha_reporte = System.currentTimeMillis()
-                                )
-                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
-                                    Toast.makeText(context, "Reporte enviado: Trancón", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier.weight(1f).padding(end = 4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                        ) {
-                            Text("Trancón")
-                        }
-                        
-                        Button(
-                            onClick = {
-                                contadorAlertas++
-                                val uid = auth.currentUser?.uid ?: ""
-                                val nuevaIncidencia = IncidenciaOficial(
-                                    id_usuario = uid,
-                                    descripcion = "Desvío",
-                                    estado = "pendiente",
-                                    fecha_reporte = System.currentTimeMillis()
-                                )
-                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
-                                    Toast.makeText(context, "Reporte enviado: Desvío", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier.weight(1f).padding(start = 4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFBC02D)) // Amarillo
-                        ) {
-                            Text("Desvío")
-                        }
+                // --- PANEL DE REPORTES CON NUEVO DISEÑO ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Reportar novedad", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Toque una opción", color = Color.Gray, fontSize = 10.sp)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Fila 1 de Reportes
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { 
+                            contadorAlertas++
+                            val incidencia = IncidenciaOficial(
+                                id_usuario = auth.currentUser?.uid ?: "",
+                                descripcion = "Trancón",
+                                estado = "pendiente",
+                                fecha_reporte = System.currentTimeMillis()
+                            )
+                            database.getReference("incidencias").push().setValue(incidencia)
+                            Toast.makeText(context, "Trancón reportado", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f).padding(end = 6.dp).height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF7ED), contentColor = Color(0xFFC2410C))
+                    ) {
+                        Text("🚦  Trancón")
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = {
-                                contadorAlertas++
-                                val uid = auth.currentUser?.uid ?: ""
-                                val nuevaIncidencia = IncidenciaOficial(
-                                    id_usuario = uid,
-                                    descripcion = "Fallo",
-                                    estado = "pendiente",
-                                    fecha_reporte = System.currentTimeMillis()
-                                )
-                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
-                                    Toast.makeText(context, "Reporte enviado: Fallo", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier.weight(1f).padding(end = 4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)) // Naranja
-                        ) {
-                            Text("Fallo")
-                        }
-
-                        Button(
-                            onClick = {
-                                contadorAlertas++
-                                val uid = auth.currentUser?.uid ?: ""
-                                val nuevaIncidencia = IncidenciaOficial(
-                                    id_usuario = uid,
-                                    descripcion = "Pánico",
-                                    estado = "urgente",
-                                    fecha_reporte = System.currentTimeMillis()
-                                )
-                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
-                                    Toast.makeText(context, "Alerta enviada: Pánico", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier.weight(1f).padding(start = 4.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) // Verde
-                        ) {
-                            Text("Pánico")
-                        }
+                    Button(
+                        onClick = { 
+                            contadorAlertas++
+                            val incidencia = IncidenciaOficial(
+                                id_usuario = auth.currentUser?.uid ?: "",
+                                descripcion = "Desvío",
+                                estado = "pendiente",
+                                fecha_reporte = System.currentTimeMillis()
+                            )
+                            database.getReference("incidencias").push().setValue(incidencia)
+                            Toast.makeText(context, "Desvío reportado", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f).padding(start = 6.dp).height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEFCE8), contentColor = Color(0xFFA16207))
+                    ) {
+                        Text("🔄  Desvío")
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Botón de Cerrar Sesión
-                Button(
+                // Fila 2 de Reportes
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { 
+                            contadorAlertas++
+                            val incidencia = IncidenciaOficial(
+                                id_usuario = auth.currentUser?.uid ?: "",
+                                descripcion = "Fallo Mecánico",
+                                estado = "pendiente",
+                                fecha_reporte = System.currentTimeMillis()
+                            )
+                            database.getReference("incidencias").push().setValue(incidencia)
+                            Toast.makeText(context, "Fallo reportado", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f).padding(end = 6.dp).height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = Color(0xFF475569))
+                    ) {
+                        Text("🔧  Fallo")
+                    }
+                    Button(
+                        onClick = { 
+                            contadorAlertas++
+                            val incidencia = IncidenciaOficial(
+                                id_usuario = auth.currentUser?.uid ?: "",
+                                descripcion = "Pánico / Emergencia",
+                                estado = "urgente",
+                                fecha_reporte = System.currentTimeMillis()
+                            )
+                            database.getReference("incidencias").push().setValue(incidencia)
+                            Toast.makeText(context, "Alerta de pánico enviada", Toast.LENGTH_LONG).show()
+                        },
+                        modifier = Modifier.weight(1f).padding(start = 6.dp).height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEF2F2), contentColor = Color(0xFFB91C1C))
+                    ) {
+                        Text("🚨  Pánico")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Botón Cerrar Sesión minimalista
+                OutlinedButton(
                     onClick = {
                         transmitiendo = false
                         val intent = Intent(context, ServicioGpsConductor::class.java)
                         context.stopService(intent)
                         onCerrarSesion()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF8FAFC), contentColor = Color(0xFF334155)),
+                    border = null
                 ) {
-                    Text("Cerrar Sesión")
+                    Text("→] Cerrar Sesión", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
     }
 }
+
 
 
 @OptIn(ExperimentalMaterial3Api::class)
