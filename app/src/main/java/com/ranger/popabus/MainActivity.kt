@@ -1458,6 +1458,68 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray)
                     ) { Text(if (rastreandoAbordaje) "⏹️ Detener" else "✅ Abordaje") }
                 }
+                // 3. BOTONES FLOTANTES (SOS y Abordaje)
+                if (rutaSeleccionada == null) {
+                    FloatingActionButton(
+                        onClick = { mostrarDialogoPanico = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 96.dp, end = 16.dp),
+                        containerColor = Color.Red
+                    ) { Text("SOS", color = Color.White) }
+
+                    Button(
+                        onClick = {
+                            rastreandoAbordaje = !rastreandoAbordaje
+                            val intentRastreo = Intent(context, ServicioRastreoPasajero::class.java)
+                            if (rastreandoAbordaje) ContextCompat.startForegroundService(context, intentRastreo)
+                            else context.stopService(intentRastreo)
+                        },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 32.dp, start = 16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray)
+                    ) { Text(if (rastreandoAbordaje) "⏹️ Detener" else "✅ Abordaje") }
+
+                    // ⬇️ ESTO ES LO QUE FALTABA ⬇️
+                    if (mostrarDialogoPanico) {
+                        AlertDialog(
+                            onDismissRequest = { mostrarDialogoPanico = false },
+                            title = { Text("⚠️ ALERTA DE PÁNICO") },
+                            text = { Text("¿Estás seguro de enviar una alerta de pánico prioritaria?") },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            try {
+                                                val lat = ubicacionPasajero?.latitude ?: popayan.latitude
+                                                val lng = ubicacionPasajero?.longitude ?: popayan.longitude
+
+                                                val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                                    com.ranger.popabus.network.IncidenciaRespuesta(
+                                                        id_usuario = "anonimo", // O el UID si lo tienes a mano
+                                                        descripcion = "PÁNICO PASAJERO",
+                                                        estado = "urgente",
+                                                        fecha_reporte = System.currentTimeMillis(),
+                                                        latitud = lat,
+                                                        longitud = lng
+                                                    )
+                                                )
+                                                if (respuesta.isSuccessful) {
+                                                    Toast.makeText(context, "🚨 Alerta enviada a la central", Toast.LENGTH_LONG).show()
+                                                    mostrarDialogoPanico = false
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                                ) { Text("Enviar Alerta") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { mostrarDialogoPanico = false }) { Text("Cancelar") }
+                            }
+                        )
+                    }
+                    // ⬆️ FIN DE LA VENTANA DE SOS ⬆️
+                }
 
                 // Botón de Cerrar Sesión
                 Button(
