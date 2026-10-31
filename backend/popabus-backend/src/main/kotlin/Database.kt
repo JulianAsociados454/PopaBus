@@ -108,10 +108,7 @@ fun initDatabase() {
         password = dbPass
     )
 
-    transaction {
-        SchemaUtils.create(Usuarios, Buses, Ubicaciones,Paraderos,Incidencias,RutasActividades, HistorialBusquedas)
-
-    }
+    SchemaUtils.create(Usuarios, Buses, Ubicaciones, Paraderos, Rutas, Incidencias, Actividades, HistorialBusquedas)
 
     println("✅ Base de datos inicializada correctamente")
 }
