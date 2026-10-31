@@ -130,6 +130,7 @@ data class ActividadRespuesta(
 
 
 
+
 interface ApiService {
     @GET("/")
     suspend fun probarConexion(): Response<MensajeRespuesta>

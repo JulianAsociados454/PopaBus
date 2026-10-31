@@ -74,6 +74,16 @@ object Rutas : Table("rutas") {
 
     override val primaryKey = PrimaryKey(id)
 }
+object Actividades : Table("actividades") {
+    val id = varchar("id", 100)
+    val id_usuario = varchar("id_usuario", 100)
+    val id_bus = varchar("id_bus", 100)
+    val id_ruta = varchar("id_ruta", 100)
+    val fecha_abordaje = long("fecha_abordaje")
+    val metodo_registro = varchar("metodo_registro", 50).default("manual")
+
+    override val primaryKey = PrimaryKey(id)
+}
 // --- CONEXIÓN E INICIALIZACIÓN ---
 
 fun initDatabase() {
@@ -91,7 +101,7 @@ fun initDatabase() {
     )
 
     transaction {
-        SchemaUtils.create(Usuarios, Buses, Ubicaciones,Paraderos,Incidencias,Rutas)        
+        SchemaUtils.create(Usuarios, Buses, Ubicaciones,Paraderos,Incidencias,RutasActividades, HistorialBusquedas)
 
     }
 

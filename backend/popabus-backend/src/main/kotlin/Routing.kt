@@ -22,6 +22,15 @@ data class MensajeRespuesta(
     val mensaje: String,
     val autor: String
 )
+@Serializable
+data class ActividadRespuesta(
+    val id: String = "",
+    val id_usuario: String,
+    val id_bus: String,
+    val id_ruta: String,
+    val fecha_abordaje: Long,
+    val metodo_registro: String = "manual"
+)
 
 // --- MODELOS DE LOGIN ---
 @Serializable
@@ -629,6 +638,41 @@ fun Application.configureRouting() {
             val eliminado = transaction { Rutas.deleteWhere { Rutas.id eq id } }
             if (eliminado > 0) call.respond(mapOf("status" to "ok"))
             else call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
+        }
+        // --- ENDPOINTS DE ACTIVIDADES (ABORDAJE) ---
+        post("/api/actividades") {
+            val request = call.receive<ActividadRespuesta>()
+            val nuevoId = "act_${System.currentTimeMillis()}"
+
+            transaction {
+                Actividades.insert {
+                    it[id] = nuevoId
+                    it[id_usuario] = request.id_usuario
+                    it[id_bus] = request.id_bus
+                    it[id_ruta] = request.id_ruta
+                    it[fecha_abordaje] = request.fecha_abordaje
+                    it[metodo_registro] = request.metodo_registro
+                }
+            }
+            println("✅ Abordaje registrado: ${request.id_bus}")
+            call.respond(HttpStatusCode.Created, mapOf("status" to "ok", "id" to nuevoId))
+        }
+
+        get("/api/actividades/{uid}") {
+            val uid = call.parameters["uid"] ?: ""
+            val lista = transaction {
+                Actividades.selectAll().where { Actividades.id_usuario eq uid }.map { fila ->
+                    ActividadRespuesta(
+                        id = fila[Actividades.id],
+                        id_usuario = fila[Actividades.id_usuario],
+                        id_bus = fila[Actividades.id_bus],
+                        id_ruta = fila[Actividades.id_ruta],
+                        fecha_abordaje = fila[Actividades.fecha_abordaje],
+                        metodo_registro = fila[Actividades.metodo_registro]
+                    )
+                }.sortedByDescending { it.fecha_abordaje }
+            }
+            call.respond(lista)
         }
     }
 
