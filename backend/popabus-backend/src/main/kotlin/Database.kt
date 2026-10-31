@@ -42,6 +42,14 @@ object Ubicaciones : Table("ubicaciones") {
 
     override val primaryKey = PrimaryKey(idBus)
 }
+object HistorialBusquedas : Table("historial_busquedas") {
+    val id = varchar("id", 100)
+    val id_usuario = varchar("id_usuario", 100)
+    val destino_buscado = varchar("destino_buscado", 200)
+    val fecha_busqueda = long("fecha_busqueda")
+
+    override val primaryKey = PrimaryKey(id)
+}
 object Paraderos : Table("paraderos") {
     val id = varchar("id", 100)
     val nombre = varchar("nombre", 200)
