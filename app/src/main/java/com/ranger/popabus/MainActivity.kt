@@ -1,6 +1,5 @@
 package com.ranger.popabus
 
-import androidx.compose.runtime.*
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -16,35 +15,36 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DirectionsBus
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,7 +95,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.material3.ExperimentalMaterial3Api
 
 
 // Representa la ubicación en tiempo real (BusesActivos)
@@ -1675,12 +1674,11 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var pestañaActual by remember { mutableStateOf("INICIO") }
+    // Memoria para saber qué ruta tocó el usuario
+    var idRutaSeleccionada by remember { mutableStateOf<String?>(null) }
     // ESTADO PARA LA VISTA ACTUAL DE AYUDA (Sugerencias, Acerca De, Preguntas)
     var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
-
-    // ESTADO PARA EL BOTÓN DE ABORDAJE MANUAL DEL PASAJERO
-    var rastreandoAbordaje by remember { mutableStateOf(false) }
 
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
@@ -1729,11 +1727,10 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     var rutasOficiales by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
     var paraderosOficiales by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
-
-    var mostrarRutas by remember { mutableStateOf(true) }
-
-    // Memoria para saber qué ruta tocó el usuario
-    var idRutaSeleccionada by remember { mutableStateOf<String?>(null) }
+    
+    // ESTADOS DEL PLANIFICADOR
+    var mostrandoPlanificador by remember { mutableStateOf(false) }
+    var inventarioBuses by remember { mutableStateOf<List<BusOficial>>(emptyList()) }
 
     // Paleta de colores distintivos para cada ruta
     val paletaColores = remember {
@@ -1748,11 +1745,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     var mostrarDialogoIncidencia by remember { mutableStateOf(false) }
     val auth = remember { FirebaseAuth.getInstance() }
-    var textoBusqueda by remember { mutableStateOf("") }
-    var menuSugerenciasExpandido by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
-
-    var paraderoSeleccionadoBusqueda by remember { mutableStateOf<ParaderoOficial?>(null) }
 
     val rutasProcesadas = remember(rutasOficiales) {
         rutasOficiales.filter {
@@ -1847,6 +1840,19 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         val database = FirebaseDatabase.getInstance()
         val refRutas = database.getReference("rutas")
         val refParaderos = database.getReference("paraderos")
+        val refBuses = database.getReference("buses")
+
+        val listenerBuses = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val buses = mutableListOf<BusOficial>()
+                for (hijo in snapshot.children) {
+                    hijo.getValue(BusOficial::class.java)?.let { buses.add(it.copy(id = hijo.key ?: "")) }
+                }
+                inventarioBuses = buses
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        refBuses.addValueEventListener(listenerBuses)
 
         val listenerParaderos = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -1945,6 +1951,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         refRutas.addValueEventListener(listenerRutas)
 
         onDispose {
+            refBuses.removeEventListener(listenerBuses)
             refParaderos.removeEventListener(listenerParaderos)
             refRutas.removeEventListener(listenerRutas)
         }
@@ -1952,97 +1959,89 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
     val mapProperties = MapProperties(isMyLocationEnabled = permisoConcedido)
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = drawerState.isOpen,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text(
-                    text = "Ayuda",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(16.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                NavigationDrawerItem(
-                    label = { Text("Sugerencias") },
-                    selected = false,
-                    onClick = {
-                        vistaAyudaActual = "SUGERENCIAS"
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Acerca De") },
-                    selected = false,
-                    onClick = {
-                        vistaAyudaActual = "ACERCA"
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Preguntas Frecuentes") },
-                    selected = false,
-                    onClick = {
-                        vistaAyudaActual = "PREGUNTAS"
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Actividad (Historial)") },
-                    selected = false,
-                    icon = { Text("⏱️") }, // Ícono simple representado por un emoji de reloj
-                    onClick = {
-                        vistaAyudaActual = "ACTIVIDAD"
-                        coroutineScope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-
-                if (auth.currentUser != null) {
-                    NavigationDrawerItem(
-                        label = { Text("⚠️ Reportar") },
-                        selected = false,
-                        onClick = {
-                            mostrarDialogoIncidencia = true
-                            coroutineScope.launch { drawerState.close() }
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp)
+    Scaffold(
+        bottomBar = {
+            if (idRutaSeleccionada == null) {
+                NavigationBar(
+                    containerColor = Color.White,
+                    tonalElevation = 4.dp
+                ) {
+                    NavigationBarItem(
+                        selected = pestañaActual == "INICIO",
+                        onClick = { pestañaActual = "INICIO" },
+                        icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
+                        label = { Text("Inicio") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray,
+                            indicatorColor = Color.Transparent
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = pestañaActual == "ACTIVIDAD",
+                        onClick = { pestañaActual = "ACTIVIDAD" },
+                        icon = { Icon(Icons.Default.Schedule, contentDescription = "Actividad") },
+                        label = { Text("Actividad") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray,
+                            indicatorColor = Color.Transparent
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = pestañaActual == "CUENTA",
+                        onClick = { pestañaActual = "CUENTA" },
+                        icon = { Icon(Icons.Default.Person, contentDescription = "Cuenta") },
+                        label = { Text("Cuenta") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray,
+                            indicatorColor = Color.Transparent
+                        )
                     )
                 }
             }
-        }
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                coroutineScope.launch { drawerState.open() }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Menú principal"
-                            )
+        },
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        when (pestañaActual) {
+            "INICIO" -> {
+                if (mostrandoPlanificador) {
+                    PantallaPlanificaViaje(
+                        ubicacionPasajero = ubicacionPasajero,
+                        rutasProcesadas = rutasProcesadas,
+                        paraderosProcesados = paraderosProcesados,
+                        busesEnZona = busesEnZona,
+                        inventarioBuses = inventarioBuses,
+                        onVolver = { mostrandoPlanificador = false },
+                        onRutaSeleccionada = { idRuta ->
+                            idRutaSeleccionada = idRuta
+                            mostrandoPlanificador = false
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
                     )
-                )
-            },
-            containerColor = Color.Transparent
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                    ) {
+                        LaunchedEffect(permisoConcedido) {
+                        if (permisoConcedido) {
+                            val intent = Intent(context, ServicioRastreoPasajero::class.java)
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                ContextCompat.startForegroundService(context, intent)
+                            } else {
+                                context.startService(intent)
+                            }
+                        }
+                    }
+
                 // 1. El Mapa va al fondo
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
@@ -2050,32 +2049,24 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     properties = mapProperties
                 ) {
 // --- NUEVO SPRINT: RENDERIZADO INTELIGENTE DE RUTAS ---
-                    if (mostrarRutas) {
+                    if (idRutaSeleccionada != null) {
                         rutasProcesadas.forEachIndexed { index, ruta ->
                             val colorBase = paletaColores[index % paletaColores.size]
                             val estaSeleccionada = (idRutaSeleccionada == ruta.id)
-                            val mostrandoTodas = (idRutaSeleccionada == null)
 
-                            // Solo dibujamos si estamos viendo todas, o si es la que el usuario seleccionó
-                            if (mostrandoTodas || estaSeleccionada) {
+                            if (estaSeleccionada) {
                                 val puntosLinea =
                                     ruta.geometria.map { LatLng(it.latitud, it.longitud) }
 
                                 com.google.maps.android.compose.Polyline(
                                     points = puntosLinea,
-                                    // Si está enfocada brilla al 100%, si no, se vuelve semitransparente (0.4f)
-                                    color = if (estaSeleccionada) colorBase else colorBase.copy(
-                                        alpha = 0.4f
-                                    ),
-                                    // Si está enfocada es muy gruesa, si no, más delgada
-                                    width = if (estaSeleccionada) 22f else 12f,
-                                    // La seleccionada siempre se dibuja por encima de las demás
-                                    zIndex = if (estaSeleccionada) 2f else 1f,
+                                    color = colorBase,
+                                    width = 22f,
+                                    zIndex = 2f,
                                     clickable = true,
                                     onClick = {
-                                        // Al tocar la línea, se enfoca. Al tocarla de nuevo, vuelve a mostrar todas.
-                                        idRutaSeleccionada =
-                                            if (estaSeleccionada) null else ruta.id
+                                        // Al tocar la línea de nuevo, vuelve a mostrar todas o deselecciona.
+                                        idRutaSeleccionada = null
                                     }
                                 )
                             }
@@ -2097,11 +2088,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                             }
                         } else {
                             emptyList()
-                        }.toMutableList()
-
-                    if (paraderoSeleccionadoBusqueda != null && !paraderosRegulares.any { it.id == paraderoSeleccionadoBusqueda!!.id }) {
-                        paraderosRegulares.add(paraderoSeleccionadoBusqueda!!)
-                    }
+                        }
 
                     paraderosRegulares.forEach { paradero ->
                         Marker(
@@ -2119,327 +2106,211 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
 
                     busesEnZona.forEach { (idBus, destino) ->
                         key(idBus) {
-                            val eta = if (ubicacionPasajero != null) {
-                                val distancia =
-                                    calcularDistanciaMetros(ubicacionPasajero!!, destino)
-                                obtenerTextoETA(distancia)
-                            } else {
-                                "Calculando..."
-                            }
-
                             MarcadorBusAnimado(
                                 idBus = idBus,
                                 destinoLatLng = destino,
                                 icono = iconoBus,
-                                textoEta = eta
+                                textoEta = "En camino"
                             )
                         }
                     }
                 }
 
-                // 2. EL BUSCADOR, RADAR Y CONTROL DE RUTAS
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 16.dp)
-                        .fillMaxWidth(0.92f)
-                        .zIndex(2f), // Asegura que no sea bloqueado y esté por encima del mapa
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    OutlinedTextField(
-                        value = textoBusqueda,
-                        onValueChange = {
-                            textoBusqueda = it
-                            menuSugerenciasExpandido = true
-                        },
-                        label = { Text("¿A dónde vas?") },
+                // 2. ELEMENTOS DE UI CONDICIONALES SOBRE EL MAPA
+                if (idRutaSeleccionada == null) {
+                    // MODO GENERAL (NO AISLADO)
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Color.White.copy(alpha = 0.95f),
-                                RoundedCornerShape(12.dp)
-                            ),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (textoBusqueda.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    textoBusqueda = ""
-                                    menuSugerenciasExpandido = false
-                                }) {
-                                    Text("❌")
-                                }
-                            } else {
-                                TextButton(
-                                    onClick = {
-                                        if (textoBusqueda.isNotEmpty()) {
-                                            val database = FirebaseDatabase.getInstance()
-                                            val refHistorial =
-                                                database.getReference("historial_busquedas")
-                                            val uid = auth.currentUser?.uid ?: ""
-
-                                            val nuevaBusqueda = HistorialBusquedaOficial(
-                                                id_usuario = uid,
-                                                destino_buscado = textoBusqueda,
-                                                rutas_resultado = emptyMap(),
-                                                fecha_busqueda = System.currentTimeMillis()
-                                            )
-
-                                            refHistorial.push().setValue(nuevaBusqueda)
-                                        }
-                                    }
-                                ) {
-                                    Text("🔍 Buscar")
-                                }
-                            }
-                        }
-                    )
-
-                    val sugerenciasParaderos = if (textoBusqueda.isNotBlank()) {
-                        paraderosProcesados.filter {
-                            it.nombre.contains(textoBusqueda, ignoreCase = true) ||
-                                    it.direccion.contains(textoBusqueda, ignoreCase = true)
-                        }.take(5)
-                    } else emptyList()
-
-                    val sugerenciasRutas = if (textoBusqueda.isNotBlank()) {
-                        rutasProcesadas.filter {
-                            it.nombre_ruta.contains(textoBusqueda, ignoreCase = true) ||
-                                    it.origen.contains(textoBusqueda, ignoreCase = true) ||
-                                    it.destino.contains(textoBusqueda, ignoreCase = true)
-                        }.take(5)
-                    } else emptyList()
-
-                    if (menuSugerenciasExpandido && (sugerenciasParaderos.isNotEmpty() || sugerenciasRutas.isNotEmpty())) {
-                        androidx.compose.material3.Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = androidx.compose.material3.CardDefaults.cardElevation(
-                                defaultElevation = 8.dp
-                            ),
-                            colors = androidx.compose.material3.CardDefaults.cardColors(
-                                containerColor = Color.White
-                            )
-                        ) {
-                            androidx.compose.foundation.lazy.LazyColumn(
-                                modifier = Modifier.heightIn(max = 220.dp)
-                            ) {
-                                items(sugerenciasParaderos) { paradero ->
-                                    androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text("📍 Paradero: ${paradero.nombre}") },
-                                        onClick = {
-                                            textoBusqueda = paradero.nombre
-                                            menuSugerenciasExpandido = false
-                                            paraderoSeleccionadoBusqueda = paradero
-                                            idRutaSeleccionada =
-                                                paradero.id_ruta // Seleccionar la ruta asociada al paradero
-                                            focusManager.clearFocus()
-                                            coroutineScope.launch {
-                                                cameraPositionState.animate(
-                                                    CameraUpdateFactory.newLatLngZoom(
-                                                        LatLng(
-                                                            paradero.latitud,
-                                                            paradero.longitud
-                                                        ),
-                                                        16f
-                                                    )
-                                                )
-                                            }
-                                        }
-                                    )
-                                }
-                                items(sugerenciasRutas) { ruta ->
-                                    androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text("🚌 Ruta: ${ruta.nombre_ruta}") },
-                                        onClick = {
-                                            textoBusqueda = ruta.nombre_ruta
-                                            menuSugerenciasExpandido = false
-                                            idRutaSeleccionada = ruta.id
-                                            focusManager.clearFocus()
-                                            if (ruta.geometria.isNotEmpty()) {
-                                                val firstPoint = ruta.geometria.first()
-                                                coroutineScope.launch {
-                                                    cameraPositionState.animate(
-                                                        CameraUpdateFactory.newLatLngZoom(
-                                                            LatLng(
-                                                                firstPoint.latitud,
-                                                                firstPoint.longitud
-                                                            ),
-                                                            14f
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .align(Alignment.TopCenter)
+                            .padding(top = 16.dp)
+                            .fillMaxWidth(0.92f)
+                            .zIndex(2f), // Asegura que no sea bloqueado y esté por encima del mapa
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Card(
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White.copy(
-                                    alpha = 0.95f
-                                )
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Text(
-                                text = "🚌 Buses en radar: ${busesEnZona.size}",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFFD32F2F),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-
-                        Card(
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White.copy(
-                                    alpha = 0.95f
-                                )
-                            ),
+                            modifier = Modifier.fillMaxWidth().clickable { mostrandoPlanificador = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp,
-                                    vertical = 4.dp
-                                ),
+                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    "🗺️ Ver Rutas",
-                                    color = Color.Black,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Switch(
-                                    checked = mostrarRutas,
-                                    onCheckedChange = {
-                                        mostrarRutas = it
-                                        if (it) idRutaSeleccionada = null
-                                    }
-                                )
+                                Text("🔍", fontSize = 16.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("¿A dónde vas?", color = Color.Gray, fontSize = 16.sp)
                             }
-                        }
-                    }
-
-                    if (textoBusqueda.isNotBlank()) {
-                        val rutasCoincidentes = rutasOficiales.filter { r ->
-                            r.nombre_ruta.contains(textoBusqueda, ignoreCase = true) ||
-                                    r.origen.contains(textoBusqueda, ignoreCase = true) ||
-                                    r.destino.contains(textoBusqueda, ignoreCase = true)
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White.copy(
-                                    alpha = 0.98f
-                                )
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                    }
+
+                    // Tarjeta de buses en radar (Minimalista Píldora)
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 80.dp)
+                            .zIndex(2f),
+                        shape = RoundedCornerShape(50),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                if (rutasCoincidentes.isNotEmpty()) {
-                                    Text(
-                                        "Rutas encontradas (${rutasCoincidentes.size}):",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    rutasCoincidentes.take(4).forEach { ruta ->
-                                        Card(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 4.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = Color(
-                                                    0xFFF5F5F5
-                                                )
-                                            ),
-                                            onClick = {
-                                                if (ruta.geometria.isNotEmpty()) {
-                                                    val primerPunto = LatLng(
-                                                        ruta.geometria.first().latitud,
-                                                        ruta.geometria.first().longitud
-                                                    )
-                                                    coroutineScope.launch {
-                                                        cameraPositionState.animate(
-                                                            update = CameraUpdateFactory.newLatLngZoom(
-                                                                primerPunto,
-                                                                15f
-                                                            ),
-                                                            durationMs = 1500
-                                                        )
-                                                    }
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Centrado en: ${ruta.nombre_ruta}",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(10.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        "🗺️ ${ruta.nombre_ruta}",
-                                                        style = MaterialTheme.typography.titleMedium
-                                                    )
-                                                    Text(
-                                                        "De: ${ruta.origen} ➔ A: ${ruta.destino}",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = Color.DarkGray
-                                                    )
-                                                }
-                                                Text(
-                                                    "Ver 📍",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    Row(
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color(0xFF00BFA5), CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Buses en radar: ${busesEnZona.size}",
+                                color = Color.DarkGray,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                } else {
+                    // MODO AISLAMIENTO DE RUTA (Línea Azul)
+                    val rutaSeleccionadaObj = rutasProcesadas.find { it.id == idRutaSeleccionada }
+                    if (rutaSeleccionadaObj != null) {
+                        // Top Start Row
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(top = 48.dp, start = 16.dp, end = 16.dp)
+                                .fillMaxWidth()
+                                .zIndex(2f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                shadowElevation = 4.dp,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clickable { idRutaSeleccionada = null }
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Volver",
+                                    tint = Color(0xFF1E293B),
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.White,
+                                shadowElevation = 4.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(
+                                        start = 4.dp,
+                                        end = 16.dp,
+                                        top = 4.dp,
+                                        bottom = 4.dp
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val numRuta = rutaSeleccionadaObj.nombre_ruta.filter { it.isDigit() }
+                                        .ifEmpty { rutaSeleccionadaObj.nombre_ruta.take(1) }
+                                    Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .size(40.dp)
+                                            .background(Color(0xFF2563EB), CircleShape),
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            "❌ No se encontraron rutas para \"$textoBusqueda\"",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color.Red
+                                            numRuta,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
                                         )
                                     }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        "Hacia ${rutaSeleccionadaObj.destino}",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF1E293B),
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        // Bottom Card Flotante
+                        Card(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 32.dp, start = 16.dp, end = 16.dp)
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Ruta: ${rutaSeleccionadaObj.nombre_ruta}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp,
+                                    color = Color(0xFF1E293B)
+                                )
+                                Text(
+                                    text = "${rutaSeleccionadaObj.origen} - ${rutaSeleccionadaObj.destino}",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                val busesDeEstaRuta =
+                                    inventarioBuses.filter { it.id_ruta == idRutaSeleccionada }
+                                        .map { it.id }
+                                val ubicacionesBusesEstaRuta =
+                                    busesEnZona.filterKeys { it in busesDeEstaRuta }.values
+                                val etaTexto = if (ubicacionPasajero != null && ubicacionesBusesEstaRuta.isNotEmpty()) {
+                                    val distancias =
+                                        ubicacionesBusesEstaRuta.map { calcularDistanciaMetros(ubicacionPasajero!!, it) }
+                                    val distanciaMin = distancias.minOrNull() ?: 0f
+                                    obtenerTextoETA(distanciaMin)
+                                } else {
+                                    "Calculando..."
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Próximo bus en: ",
+                                        color = Color(0xFF1E293B),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = etaTexto,
+                                        color = Color(0xFF2563EB),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { idRutaSeleccionada = null },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                                ) {
+                                    Text("Ver mapa completo", color = Color.White)
                                 }
                             }
                         }
                     }
                 }
 
+                // DIÁLOGOS (SOS e Incidencia)
                 if (mostrarDialogoIncidencia) {
                     DialogoReportarIncidencia(
                         onDismiss = { mostrarDialogoIncidencia = false },
@@ -2478,14 +2349,25 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         }
                     )
                 }
-                FloatingActionButton(
-                    onClick = { mostrarDialogoPanico = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 96.dp, end = 16.dp),
-                    containerColor = Color.Red
-                ) {
-                    Text("SOS", color = Color.White)
+                // BOTÓN SOS ÚNICO Y ESTILIZADO (Oculto en modo aislamiento)
+                if (idRutaSeleccionada == null) {
+                    FloatingActionButton(
+                        onClick = { mostrarDialogoPanico = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 24.dp, end = 16.dp),
+                        shape = CircleShape,
+                        containerColor = Color(0xFFE53935)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Warning,
+                                contentDescription = "SOS",
+                                tint = Color.White
+                            )
+                            Text("SOS", color = Color.White, fontSize = 10.sp)
+                        }
+                    }
                 }
 
                 // --- TAREA 15: BOTÓN DE PÁNICO DEL PASAJERO ---
@@ -2532,53 +2414,6 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     )
                 }
 
-                // ----------------------------------------------
-
-                if (auth.currentUser != null) {
-                    Button(
-                        onClick = { mostrarDialogoIncidencia = true },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 32.dp, end = 16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500))
-                    ) {
-                        Text("⚠️ Reportar")
-                    }
-
-                    // BOTÓN DE ABORDAJE (Rastreo de bus actual)
-                    Button(
-                        onClick = {
-                            rastreandoAbordaje = !rastreandoAbordaje
-                            val intentRastreo =
-                                Intent(context, ServicioRastreoPasajero::class.java)
-
-                            if (rastreandoAbordaje) {
-                                ContextCompat.startForegroundService(context, intentRastreo)
-                            } else {
-                                context.stopService(intentRastreo)
-                            }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(bottom = 32.dp, start = 16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray
-                        )
-                    ) {
-                        Text(if (rastreandoAbordaje) "⏹️ Detener Búsqueda" else "✅ Registrar Abordaje")
-                    }
-                }
-
-                Button(
-                    onClick = onCerrarSesion,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 32.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text(if (auth.currentUser != null) "Cerrar Sesión" else "Salir del Mapa")
-                }
-
                 // INYECCIÓN DE LAS VISTAS DE AYUDA (Se superponen al mapa)
                 if (vistaAyudaActual == "ACERCA") {
                     VistaAcercaDe(onDismiss = { vistaAyudaActual = null })
@@ -2586,7 +2421,12 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     VistaPreguntasFrecuentes(onDismiss = { vistaAyudaActual = null })
                 } else if (vistaAyudaActual == "SUGERENCIAS") {
                     VistaSugerencias(onDismiss = { vistaAyudaActual = null })
-                } else if (vistaAyudaActual == "ACTIVIDAD") {
+                }
+            } // Fin de Box original de mapa
+            } // Fin de else (mostrandoPlanificador)
+            } // Fin de Box de INICIO
+            "ACTIVIDAD" -> {
+                Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                     var listaActividades by remember {
                         mutableStateOf<List<ActividadUsuario>>(
                             emptyList()
@@ -2630,10 +2470,24 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     VistaActividad(
                         listaActividades = listaActividades,
                         hayInternet = true,
-                        onDismiss = { vistaAyudaActual = null }
+                        onDismiss = { pestañaActual = "INICIO" }
                     )
                 }
-
+            }
+            "CUENTA" -> {
+                Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                    PantallaCuentaPasajero(
+                        onCerrarSesion = onCerrarSesion,
+                        onOpcionSeleccionada = { opcion ->
+                            when (opcion) {
+                                "Acerca de PopaBus" -> vistaAyudaActual = "ACERCA"
+                                "Preguntas Frecuentes" -> vistaAyudaActual = "PREGUNTAS"
+                                "Sugerencias" -> vistaAyudaActual = "SUGERENCIAS"
+                                "Reportar" -> mostrarDialogoIncidencia = true
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -2760,9 +2614,7 @@ fun VistaActividad(
     listaActividades: List<ActividadUsuario>,
     hayInternet: Boolean,
     onDismiss: () -> Unit = {}
-)
-{
-
+) {
     // 1. Configuramos el ColorMatrix para la escala de grises
     val colorMatrix = remember(hayInternet) {
         val matrix = ColorMatrix()
@@ -2772,425 +2624,577 @@ fun VistaActividad(
         matrix
     }
 
-    // Usamos un AlertDialog para mantener la consistencia con las otras vistas de ayuda
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC))
+            .graphicsLayer {
+                // Si no hay internet, inyectamos el filtro a TODA la vista hija
+                if (!hayInternet) {
+                    colorFilter = ColorFilter.colorMatrix(colorMatrix)
+                }
+            }
+    ) {
+        // Cabecera y Título de Sección
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
-                text = "Historial de Abordajes",
-                style = MaterialTheme.typography.titleLarge
+                text = "Actividad",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E293B)
             )
-        },
-        text = {
-            // 2. Aplicamos el graphicsLayer a todo el contenedor principal
-            Box(
+        }
+
+        Text(
+            text = "TUS VIAJES RECIENTES",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF94A3B8),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+        )
+
+        if (listaActividades.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "Aún no tienes actividad reciente",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF94A3B8)
+                )
+            }
+        } else {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer {
-                        // Si no hay internet, inyectamos el filtro a TODA la vista hija
-                        if (!hayInternet) {
-                            colorFilter = ColorFilter.colorMatrix(colorMatrix)
-                        }
-                    }
+                    .padding(horizontal = 16.dp)
             ) {
-                if (listaActividades.isEmpty()) {
-                    // Estado vacío
-                    Text(
-                        text = "Aún no tienes actividad reciente",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
-                } else {
-                    // Lista de tarjetas
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                items(listaActividades) { actividad ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
-                        items(listaActividades) { actividad ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Izquierda (Ícono)
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(Color(0xFFEFF6FF), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(
-                                        text = "Bus: ${actividad.id_bus}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = "Ruta: ${actividad.id_ruta}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsBus,
+                                    contentDescription = "Viaje",
+                                    tint = Color(0xFF2563EB)
+                                )
+                            }
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                            // Centro (Textos)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                Text(
+                                    text = "Bus: ${actividad.id_bus}",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E293B)
+                                )
+                                Text(
+                                    text = "Registro ${actividad.metodo_registro}",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF64748B)
+                                )
 
-                                    // Formateo seguro de la fecha
-                                    val fechaFormateada =
-                                        remember(actividad.fecha_abordaje) {
-                                            val sdf = SimpleDateFormat(
-                                                "dd/MM/yyyy hh:mm a",
-                                                Locale.getDefault()
-                                            )
-                                            sdf.format(Date(actividad.fecha_abordaje))
-                                        }
-
-                                    Text(
-                                        text = "Fecha: $fechaFormateada",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                    Text(
-                                        text = "Método: ${actividad.metodo_registro.uppercase()}",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
+                                val fechaFormateada = remember(actividad.fecha_abordaje) {
+                                    val sdf = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
+                                    sdf.format(Date(actividad.fecha_abordaje))
                                 }
+
+                                Text(
+                                    text = fechaFormateada,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8) // Gris claro
+                                )
+                            }
+
+                            // Derecha (Píldora de Ruta)
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color(0xFFE6FFFA)
+                            ) {
+                                Text(
+                                    text = "Ruta ${actividad.id_ruta}",
+                                    color = Color(0xFF0D9488),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
                             }
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cerrar")
-            }
         }
-    )
+    }
 }
 
 
 @Composable
 fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
-    // Memoria interna para navegar dentro del panel de admin sin tocar el MainActivity
-    var subPantalla by rememberSaveable { mutableStateOf("MENU") }
+    var subPantalla by remember { mutableStateOf("MENU") }
 
-    when (subPantalla) {
-        "MENU" -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFF8FAFC)) // Color de fondo gris muy claro del mockup
-                    .padding(horizontal = 24.dp, vertical = 24.dp)
-            ) {
-                // Cabecera
-                Text(
-                    text = "POPABUS",
-                    color = Color(0xFF0D9488),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.5.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+    // --- NUEVO: ESTADO PARA EL NOMBRE DEL ADMINISTRADOR ---
+    var nombreAdmin by remember { mutableStateOf("Cargando...") }
+    val auth = remember { FirebaseAuth.getInstance() }
+    val database = remember { FirebaseDatabase.getInstance() }
+
+    // --- NUEVO: EFECTO PARA DESCARGAR EL NOMBRE REAL ---
+    LaunchedEffect(Unit) {
+        val uid = auth.currentUser?.uid
+        if (uid != null) {
+            database.getReference("usuarios").child(uid).child("nombre_completo").get()
+                .addOnSuccessListener { snapshot ->
+                    val nombreReal = snapshot.getValue(String::class.java)
+                    if (nombreReal != null) {
+                        nombreAdmin = nombreReal
+                    } else {
+                        nombreAdmin = "Administrador" // Fallback seguro
+                    }
+                }
+                .addOnFailureListener {
+                    nombreAdmin = "Administrador" // Fallback si falla la conexión
+                }
+        } else {
+            nombreAdmin = "Administrador Invitado"
+        }
+    }
+
+// --- NUEVO: ESTRUCTURA SCAFFOLD PARA LA BARRA INFERIOR ---
+    Scaffold(
+        bottomBar = {
+            // SOLO mostramos la barra si NO estamos en el Menú principal
+            if (subPantalla != "MENU") {
+                NavigationBar(
+                    modifier = Modifier.height(70.dp),
+                    containerColor = Color.White,
+                    tonalElevation = 0.dp
                 ) {
-                    Text(
-                        text = "Panel de\nAdministración",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B),
-                        lineHeight = 30.sp
+                    // Atajo 1: Inicio
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
+                        label = { Text("Inicio", fontSize = 10.sp) },
+                        selected = subPantalla == "MENU",
+                        onClick = { subPantalla = "MENU" },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF3B82F6),
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            selectedTextColor = Color(0xFF3B82F6),
+                            unselectedTextColor = Color(0xFF94A3B8),
+                            indicatorColor = Color(0xFFEFF6FF)
+                        )
                     )
 
-                    // Avatar simulado
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFE0E7FF),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text("Pepito Pérez", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E293B))
-                            Text("Administrador", fontSize = 10.sp, color = Color(0xFF64748B))
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Subtítulo
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "VISTA GENERAL",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = "¿Qué deseas gestionar?",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(6.dp).background(Color(0xFF10B981), CircleShape))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("En línea", fontSize = 12.sp, color = Color(0xFF64748B))
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Grilla de 6 botones
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Botón 1: Gestión Humana
-                    Card(
-                        onClick = { subPantalla = "USUARIOS" },
-                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFEFF6FF),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = Color(0xFF3B82F6),
-                                    modifier = Modifier.padding(10.dp)
-                                )
-                            }
-                            Text(
-                                "Gestión Humana",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            )
-                        }
-                    }
-
-                    // Botón 2: Paraderos
-                    Card(
-                        onClick = { subPantalla = "PARADEROS" },
-                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFEFF6FF),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                // Aquí puedes usar tu ícono de paradero personalizado si lo tienes
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("📍", fontSize = 16.sp)
-                                }
-                            }
-                            Text(
-                                "Gestionar Paraderos",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Botón 3: Rutas
-                    Card(
-                        onClick = { subPantalla = "RUTAS" },
-                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFEFF6FF),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("🗺️", fontSize = 16.sp)
-                                }
-                            }
-                            Text(
-                                "Gestionar Rutas",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            )
-                        }
-                    }
-
-                    // Botón 4: Buses
-                    Card(
-                        onClick = { subPantalla = "BUSES" },
-                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFEFF6FF),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DirectionsBus,
-                                    contentDescription = null,
-                                    tint = Color(0xFF3B82F6),
-                                    modifier = Modifier.padding(10.dp)
-                                )
-                            }
-                            Text(
-                                "Gestionar Buses",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Botón 5: Reportes
-                    Card(
+                    // Atajo 2: Reportes
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Inbox, contentDescription = "Reportes") },
+                        label = { Text("Reportes", fontSize = 10.sp) },
+                        selected = subPantalla == "REPORTES",
                         onClick = { subPantalla = "REPORTES" },
-                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFEFF6FF),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("📥", fontSize = 16.sp)
-                                }
-                            }
-                            Text(
-                                "Buzón de Reportes",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            )
-                        }
-                    }
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF3B82F6),
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            selectedTextColor = Color(0xFF3B82F6),
+                            unselectedTextColor = Color(0xFF94A3B8),
+                            indicatorColor = Color(0xFFEFF6FF)
+                        )
+                    )
 
-                    // Botón 6: Informes
-                    Card(
+                    // Atajo 3: Mapa (Torre de Control)
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.LocationOn, contentDescription = "Mapa") },
+                        label = { Text("Mapa", fontSize = 10.sp) },
+                        selected = subPantalla == "TORRE_CONTROL",
+                        onClick = { subPantalla = "TORRE_CONTROL" },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF3B82F6),
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            selectedTextColor = Color(0xFF3B82F6),
+                            unselectedTextColor = Color(0xFF94A3B8),
+                            indicatorColor = Color(0xFFEFF6FF)
+                        )
+                    )
+
+                    // Atajo 4: Informes
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.BarChart, contentDescription = "Informes") },
+                        label = { Text("Informes", fontSize = 10.sp) },
+                        selected = subPantalla == "INFORMES",
                         onClick = { subPantalla = "INFORMES" },
-                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFEFF6FF),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("📊", fontSize = 16.sp)
-                                }
-                            }
-                            Text(
-                                "Gestión de Informes",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.align(Alignment.BottomStart)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Tarjeta Torre de Control
-                Card(
-                    onClick = { subPantalla = "TORRE_CONTROL" },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), // Verde muy claro
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFF6EE7B7)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFE0E7FF),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("📡", fontSize = 16.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text("MONITOREO EN TIEMPO REAL", color = Color(0xFF0D9488), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Text("Torre de Control - Mapa", color = Color(0xFF1E293B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Botón Cerrar Sesión Rojo
-                Button(
-                    onClick = onCerrarSesion,
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)) // Rojo intenso
-                ) {
-                    Text("→] Cerrar Sesión", fontWeight = FontWeight.Bold, color = Color.White)
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF3B82F6),
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            selectedTextColor = Color(0xFF3B82F6),
+                            unselectedTextColor = Color(0xFF94A3B8),
+                            indicatorColor = Color(0xFFEFF6FF)
+                        )
+                    )
                 }
             }
         }
+    ) { paddingValues ->
+// El contenido actual de tus pantallas se renderiza aquí
+        Box(modifier = Modifier.padding(paddingValues)) {
+            when (subPantalla) {
+                "MENU" -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFF8FAFC)) // Color de fondo gris muy claro del mockup
+                            // --- CORRECCIÓN: Ajustamos el padding para evitar que el botón quede oculto ---
+                            .padding(
+                                start = 24.dp,
+                                end = 24.dp,
+                                top = 24.dp,
+                                // Reducimos el padding inferior drásticamente porque el Scaffold ya apartó espacio
+                                bottom = 0.dp
+                            )
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        // Cabecera
+                        // Cabecera
+                        Text(
+                            text = "POPABUS",
+                            color = Color(0xFF0D9488),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Panel de\nAdministración",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E293B),
+                                lineHeight = 30.sp
+                            )
 
-        "PARADEROS" -> PantallaGestionParaderos(onVolver = { subPantalla = "MENU" })
-        "RUTAS" -> PantallaGestionRutas(onVolver = { subPantalla = "MENU" })
-        "BUSES" -> PantallaGestionBuses(onVolver = { subPantalla = "MENU" })
-        "REPORTES" -> PantallaGestionReportes(onVolver = { subPantalla = "MENU" })
-        "TORRE_CONTROL" -> MapaGeneralAdmin(onVolver = { subPantalla = "MENU" })
-        "INFORMES" -> PantallaGestionInformes(onVolver = { subPantalla = "MENU" })
+                            // Avatar simulado
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFE0E7FF),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        // Mostramos la inicial del nombre real
+                                        Text(
+                                            text = nombreAdmin.firstOrNull()?.uppercase() ?: "A",
+                                            color = Color(0xFF3B82F6),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    // --- AQUÍ MOSTRAMOS EL NOMBRE DINÁMICO ---
+                                    Text(text = nombreAdmin, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E293B))
+                                    Text(text = "Administrador", fontSize = 10.sp, color = Color(0xFF64748B))
+                                }
+                            }
+                        }
 
-        // --- NUEVO SPRINT 11: RUTA A GESTIÓN DE USUARIOS ---
-        "USUARIOS" -> PantallaGestionUsuarios(onVolver = { subPantalla = "MENU" })
+                        Spacer(modifier = Modifier.height(24.dp))
+                        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Subtítulo
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "VISTA GENERAL",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "¿Qué deseas gestionar?",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E293B)
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(6.dp).background(Color(0xFF10B981), CircleShape))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("En línea", fontSize = 12.sp, color = Color(0xFF64748B))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Grilla de 6 botones
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Botón 1: Gestión Humana
+                            Card(
+                                onClick = { subPantalla = "USUARIOS" },
+                                modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                    Text(
+                                        "Gestión Humana",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B),
+                                        modifier = Modifier.align(Alignment.BottomStart)
+                                    )
+                                }
+                            }
+
+                            // Botón 2: Paraderos
+                            Card(
+                                onClick = { subPantalla = "PARADEROS" },
+                                modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text("📍", fontSize = 16.sp)
+                                        }
+                                    }
+                                    Text(
+                                        "Gestionar Paraderos",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B),
+                                        modifier = Modifier.align(Alignment.BottomStart)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Botón 3: Rutas
+                            Card(
+                                onClick = { subPantalla = "RUTAS" },
+                                modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text("🗺️", fontSize = 16.sp)
+                                        }
+                                    }
+                                    Text(
+                                        "Gestionar Rutas",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B),
+                                        modifier = Modifier.align(Alignment.BottomStart)
+                                    )
+                                }
+                            }
+
+                            // Botón 4: Buses
+                            Card(
+                                onClick = { subPantalla = "BUSES" },
+                                modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsBus,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                    Text(
+                                        "Gestionar Buses",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B),
+                                        modifier = Modifier.align(Alignment.BottomStart)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Botón 5: Reportes
+                            Card(
+                                onClick = { subPantalla = "REPORTES" },
+                                modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text("📥", fontSize = 16.sp)
+                                        }
+                                    }
+                                    Text(
+                                        "Buzón de Reportes",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B),
+                                        modifier = Modifier.align(Alignment.BottomStart)
+                                    )
+                                }
+                            }
+
+                            // Botón 6: Informes
+                            Card(
+                                onClick = { subPantalla = "INFORMES" },
+                                modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text("📊", fontSize = 16.sp)
+                                        }
+                                    }
+                                    Text(
+                                        "Gestión de Informes",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF1E293B),
+                                        modifier = Modifier.align(Alignment.BottomStart)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Tarjeta Torre de Control
+                        Card(
+                            onClick = { subPantalla = "TORRE_CONTROL" },
+                            modifier = Modifier.fillMaxWidth().height(80.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), // Verde muy claro
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFF6EE7B7)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFE0E7FF),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text("📡", fontSize = 16.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text("MONITOREO EN TIEMPO REAL", color = Color(0xFF0D9488), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("Torre de Control - Mapa", color = Color(0xFF1E293B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        // Botón Cerrar Sesión Rojo
+                        Button(
+                            onClick = onCerrarSesion,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(25.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)) // Rojo intenso
+                        ) {
+                            Text("→] Cerrar Sesión", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+                "PARADEROS" -> PantallaGestionParaderos(onVolver = { subPantalla = "MENU" })
+                "RUTAS" -> PantallaGestionRutas(onVolver = { subPantalla = "MENU" })
+                "BUSES" -> PantallaGestionBuses(onVolver = { subPantalla = "MENU" })
+                "USUARIOS" -> PantallaGestionUsuarios(onVolver = { subPantalla = "MENU" })
+                "REPORTES" -> PantallaGestionReportes(onVolver = { subPantalla = "MENU" })
+                "INFORMES" -> PantallaGestionInformes(onVolver = { subPantalla = "MENU" })
+                "TORRE_CONTROL" -> MapaGeneralAdmin(onVolver = { subPantalla = "MENU" })
+            }
+        }
     }
 }
 
@@ -3263,7 +3267,7 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC)) // Fondo gris claro
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
     ) {
         // Cabecera idéntica al mockup
         Row(
@@ -3312,247 +3316,299 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-        Spacer(modifier = Modifier.height(24.dp))
 
-        // Textos de subtítulo
-        Text(
-            text = "RED DE PARADAS",
-            color = Color(0xFF0D9488),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Text(
-            text = "Crea y consulta los puntos autorizados.",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B),
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-        )
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            item {
+                Column {
+                    Spacer(modifier = Modifier.height(24.dp))
 
-        // FORMULARIO DE CREACIÓN
-        OutlinedTextField(
-            value = nombre,
-            onValueChange = { nombre = it },
-            label = { Text("Nombre (Ej: Terminal Norte)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = Color.White,
-                focusedContainerColor = Color.White,
-                unfocusedBorderColor = Color.Transparent
-            )
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = direccion,
-            onValueChange = { direccion = it },
-            label = { Text("Dirección (Calle o carrera)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = Color.White,
-                focusedContainerColor = Color.White,
-                unfocusedBorderColor = Color.Transparent
-            )
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = latitud,
-                onValueChange = { latitud = it },
-                label = { Text("Latitud") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent
+                // Textos de subtítulo
+                Text(
+                    text = "RED DE PARADAS",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
                 )
-            )
-            OutlinedTextField(
-                value = longitud,
-                onValueChange = { longitud = it },
-                label = { Text("Longitud") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent
+                Text(
+                    text = "Crea y consulta los puntos autorizados.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
 
-        // DROPDOWN NUEVO PARA ASIGNAR RUTA
-        val nombreRutaSeleccionada = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta asignada"
-
-        ExposedDropdownMenuBox(
-            expanded = expandedRuta,
-            onExpandedChange = { expandedRuta = !expandedRuta }
-        ) {
-            OutlinedTextField(
-                value = nombreRutaSeleccionada,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Asignar a Ruta Oficial") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRuta) },
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent
+                // FORMULARIO DE CREACIÓN
+                Text(
+                    text = "Nombre",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
                 )
-            )
-            ExposedDropdownMenu(
-                expanded = expandedRuta,
-                onDismissRequest = { expandedRuta = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Sin ruta asignada") },
-                    onClick = {
-                        idRuta = ""
-                        expandedRuta = false
-                    }
-                )
-                listaRutas.forEach { ruta ->
-                    DropdownMenuItem(
-                        text = { Text(ruta.nombre_ruta) },
-                        onClick = {
-                            idRuta = ruta.id // Guardamos el ID real en la variable
-                            expandedRuta = false
-                        }
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    placeholder = { Text("Ej: Terminal Norte", color = Color.LightGray, fontSize = 14.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        unfocusedBorderColor = Color.Transparent
                     )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Dirección",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = direccion,
+                    onValueChange = { direccion = it },
+                    placeholder = { Text("Ej: Calle 4 # 12-45", color = Color.LightGray, fontSize = 14.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        unfocusedBorderColor = Color.Transparent
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Latitud",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF1E293B)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = latitud,
+                            onValueChange = { latitud = it },
+                            placeholder = { Text("Ej: 2.4419", color = Color.LightGray, fontSize = 14.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = Color.White,
+                                focusedContainerColor = Color.White,
+                                unfocusedBorderColor = Color.Transparent
+                            )
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Longitud",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF1E293B)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = longitud,
+                            onValueChange = { longitud = it },
+                            placeholder = { Text("Ej: -76.6063", color = Color.LightGray, fontSize = 14.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = Color.White,
+                                focusedContainerColor = Color.White,
+                                unfocusedBorderColor = Color.Transparent
+                            )
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // DROPDOWN NUEVO PARA ASIGNAR RUTA
+                Text(
+                    text = "Asignar a Ruta Oficial",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val nombreRutaSeleccionada = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: ""
+
+                ExposedDropdownMenuBox(
+                    expanded = expandedRuta,
+                    onExpandedChange = { expandedRuta = !expandedRuta }
+                ) {
+                    OutlinedTextField(
+                        value = nombreRutaSeleccionada,
+                        onValueChange = {},
+                        readOnly = true,
+                        placeholder = { Text("Ej: Ruta 3", color = Color.LightGray, fontSize = 14.sp) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRuta) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedContainerColor = Color.White,
+                            focusedContainerColor = Color.White,
+                            unfocusedBorderColor = Color.Transparent
+                        )
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expandedRuta,
+                        onDismissRequest = { expandedRuta = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Sin ruta asignada") },
+                            onClick = {
+                                idRuta = ""
+                                expandedRuta = false
+                            }
+                        )
+                        listaRutas.forEach { ruta ->
+                            DropdownMenuItem(
+                                text = { Text(ruta.nombre_ruta) },
+                                onClick = {
+                                    idRuta = ruta.id // Guardamos el ID real en la variable
+                                    expandedRuta = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Botón Crear Paradero (Azul vibrante)
+                Button(
+                    onClick = {
+                        val lat = latitud.toDoubleOrNull()
+                        val lng = longitud.toDoubleOrNull()
+
+                        if (nombre.isNotEmpty() && lat != null && lng != null) {
+                            val nuevoParaderoRef = refParaderos.push()
+                            val geohash = calcularGeohash(lat, lng)
+
+                            val nuevoParadero = ParaderoOficial(
+                                nombre = nombre,
+                                direccion = direccion,
+                                latitud = lat,
+                                longitud = lng,
+                                geohash = geohash,
+                                estado = "activo",
+                                id_ruta = idRuta.trim() // El ID seleccionado se guarda aquí
+                            )
+
+                            nuevoParaderoRef.setValue(nuevoParadero).addOnSuccessListener {
+                                Toast.makeText(context, "Paradero Guardado", Toast.LENGTH_SHORT).show()
+                                nombre = ""
+                                direccion = ""
+                                latitud = ""
+                                longitud = ""
+                                idRuta = ""
+                            }.addOnFailureListener {
+                                Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Llene nombre y coordenadas válidas", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) {
+                    Text("➕ Crear Paradero", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Botón Crear Paradero (Azul vibrante)
-        Button(
-            onClick = {
-                val lat = latitud.toDoubleOrNull()
-                val lng = longitud.toDoubleOrNull()
-
-                if (nombre.isNotEmpty() && lat != null && lng != null) {
-                    val nuevoParaderoRef = refParaderos.push()
-                    val geohash = calcularGeohash(lat, lng)
-
-                    val nuevoParadero = ParaderoOficial(
-                        nombre = nombre,
-                        direccion = direccion,
-                        latitud = lat,
-                        longitud = lng,
-                        geohash = geohash,
-                        estado = "activo",
-                        id_ruta = idRuta.trim() // El ID seleccionado se guarda aquí
-                    )
-
-                    nuevoParaderoRef.setValue(nuevoParadero).addOnSuccessListener {
-                        Toast.makeText(context, "Paradero Guardado", Toast.LENGTH_SHORT).show()
-                        nombre = ""
-                        direccion = ""
-                        latitud = ""
-                        longitud = ""
-                        idRuta = ""
-                    }.addOnFailureListener {
-                        Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    Toast.makeText(context, "Llene nombre y coordenadas válidas", Toast.LENGTH_SHORT).show()
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-        ) {
-            Text("➕ Crear Paradero", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         // Encabezado de la lista con Badge
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Paraderos registrados", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
-            Surface(
-                shape = CircleShape,
-                color = Color(0xFFEFF6FF),
-                modifier = Modifier.size(24.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(text = listaParaderos.size.toString(), color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        item {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Paraderos registrados", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEFF6FF),
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = listaParaderos.size.toString(), color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         // LISTA DE PARADEROS
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(listaParaderos) { paradero ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .clickable { paraderoSeleccionado = paradero },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        items(listaParaderos) { paradero ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .clickable { paraderoSeleccionado = paradero },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEFF6FF),
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFEFF6FF),
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("📍", fontSize = 16.sp)
-                            }
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("📍", fontSize = 16.sp)
                         }
+                    }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = paradero.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
-                            Text(text = paradero.direccion, fontSize = 12.sp, color = Color(0xFF64748B))
-                            Text(text = "${paradero.latitud}, ${paradero.longitud}", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = paradero.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
+                        Text(text = paradero.direccion, fontSize = 12.sp, color = Color(0xFF64748B))
+                        Text(text = "${paradero.latitud}, ${paradero.longitud}", fontSize = 10.sp, color = Color(0xFF94A3B8))
 
-                            val rutaVinculada = listaRutas.find { it.id == paradero.id_ruta }?.nombre_ruta
-                            if (rutaVinculada != null) {
-                                Text(text = "Ruta: $rutaVinculada", fontSize = 10.sp, color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
-                            }
+                        val rutaVinculada = listaRutas.find { it.id == paradero.id_ruta }?.nombre_ruta
+                        if (rutaVinculada != null) {
+                            Text(text = "Ruta: $rutaVinculada", fontSize = 10.sp, color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        item {
+            Column {
+                Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón Volver
-        OutlinedButton(
-            onClick = onVolver,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
-        ) {
-            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                // Botón Volver
+                OutlinedButton(
+                    onClick = onVolver,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                ) {
+                    Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
+}
 
     // --- DIÁLOGO DE EDICIÓN CON DROPDOWN ---
     if (paraderoSeleccionado != null) {
@@ -3664,7 +3720,6 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
         )
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionRutas(onVolver: () -> Unit) {
@@ -3708,7 +3763,7 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC)) // Fondo gris claro
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
     ) {
         // Cabecera idéntica al mockup
         Row(
@@ -3757,7 +3812,11 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-        Spacer(modifier = Modifier.height(24.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            item {
+                Column {
+                    Spacer(modifier = Modifier.height(24.dp))
 
         // Textos de subtítulo
         Text(
@@ -3776,10 +3835,17 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
         )
 
         // FORMULARIO DE CREACIÓN
+        Text(
+            text = "Nombre",
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = Color(0xFF1E293B)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
         OutlinedTextField(
             value = nombreRuta,
             onValueChange = { nombreRuta = it },
-            label = { Text("Nombre (Ej: Ruta 12)") },
+            placeholder = { Text("Ej: Ruta 12", color = Color.LightGray) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
@@ -3791,11 +3857,19 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = origen,
-                onValueChange = { origen = it },
-                label = { Text("Origen (Punto inicial)") },
-                modifier = Modifier.weight(1f),
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Origen",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = origen,
+                    onValueChange = { origen = it },
+                    placeholder = { Text("Ej: Punto inicial", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -3804,11 +3878,20 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
                     unfocusedBorderColor = Color.Transparent
                 )
             )
-            OutlinedTextField(
-                value = destino,
-                onValueChange = { destino = it },
-                label = { Text("Destino (Punto final)") },
-                modifier = Modifier.weight(1f),
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Destino",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = destino,
+                    onValueChange = { destino = it },
+                    placeholder = { Text("Ej: Punto final", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -3817,6 +3900,7 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
                     unfocusedBorderColor = Color.Transparent
                 )
             )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -3854,8 +3938,12 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
 
-        // Encabezado de la lista con Badge
+        item {
+            Column {
+                // Encabezado de la lista con Badge
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3873,11 +3961,12 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
 
         // LISTA DE RUTAS
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(listaRutas) { ruta ->
+        items(listaRutas) { ruta ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3938,20 +4027,25 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        item {
+            Column {
+                Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón Volver
-        OutlinedButton(
-            onClick = onVolver,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
-        ) {
-            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                // Botón Volver
+                OutlinedButton(
+                    onClick = onVolver,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                ) {
+                    Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
+}
 
     // --- DIÁLOGO DE EDICIÓN CON LÓGICA INTACTA ---
     if (rutaSeleccionada != null) {
@@ -4046,7 +4140,6 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionBuses(onVolver: () -> Unit) {
@@ -4129,7 +4222,7 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC)) // Fondo gris claro
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
     ) {
         // Cabecera idéntica al mockup
         Row(
@@ -4178,7 +4271,11 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-        Spacer(modifier = Modifier.height(24.dp))
+        
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            item {
+                Column {
+                    Spacer(modifier = Modifier.height(24.dp))
 
         // Textos de subtítulo
         Text(
@@ -4198,36 +4295,61 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
         // FORMULARIO DE CREACIÓN
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = placa,
-                onValueChange = { placa = it },
-                label = { Text("Placa (Ej: ABC-123)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Placa",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
                 )
-            )
-            OutlinedTextField(
-                value = modelo,
-                onValueChange = { modelo = it },
-                label = { Text("Modelo (Marca/línea)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.Transparent
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = placa,
+                    onValueChange = { placa = it },
+                    placeholder = { Text("Ej: ABC-123", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        unfocusedBorderColor = Color.Transparent
+                    )
                 )
-            )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Modelo",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = modelo,
+                    onValueChange = { modelo = it },
+                    placeholder = { Text("Marca/línea", color = Color.LightGray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = Color.White,
+                        unfocusedBorderColor = Color.Transparent
+                    )
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        Text(
+            text = "Asignar Ruta",
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = Color(0xFF1E293B)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
         // --- DROPDOWN RUTAS ---
         var expandedRuta by remember { mutableStateOf(false) }
         val nombreRutaSeleccionada = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta asignada"
@@ -4240,7 +4362,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 value = nombreRutaSeleccionada,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Asignar Ruta") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRuta) },
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -4275,6 +4396,13 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        Text(
+            text = "Asignar Conductor",
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = Color(0xFF1E293B)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
         // --- DROPDOWN CONDUCTORES ---
         var expandedConductor by remember { mutableStateOf(false) }
         val nombreConductorSeleccionado = listaConductores.find { it.id == idConductor }?.nombre_completo ?: "Sin conductor asignado"
@@ -4287,7 +4415,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 value = nombreConductorSeleccionado,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Asignar Conductor") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedConductor) },
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -4376,10 +4503,11 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
 
         // LISTA DE BUSES
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(listaBuses) { bus ->
+        items(listaBuses) { bus ->
                 val nombreRutaList = listaRutas.find { it.id == bus.id_ruta }?.nombre_ruta ?: "Ninguna"
                 val nombreConductorList = listaConductores.find { it.id == bus.id_conductor_actual }?.nombre_completo ?: "Ninguno"
 
@@ -4428,20 +4556,25 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        item {
+            Column {
+                Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón Volver
-        OutlinedButton(
-            onClick = onVolver,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
-        ) {
-            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                // Botón Volver
+                OutlinedButton(
+                    onClick = onVolver,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                ) {
+                    Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
+}
 
     // --- DIÁLOGO DE EDICIÓN CON DROPDOWNS ---
     if (busSeleccionado != null) {
@@ -5334,6 +5467,7 @@ fun PantallaGestionReportes(onVolver: () -> Unit) {
 fun MapaGeneralAdmin(onVolver: () -> Unit) {
     val context = LocalContext.current
     var flotaActiva by remember { mutableStateOf<Map<String, PosicionGpsOficial>>(emptyMap()) }
+    var inventarioBuses by remember { mutableStateOf<Map<String, BusOficial>>(emptyMap()) }
 
     // Timer para forzar la recomposición cada cierto tiempo y actualizar los colores de conectividad
     var tiempoActual by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -5396,6 +5530,31 @@ fun MapaGeneralAdmin(onVolver: () -> Unit) {
         onDispose { refBuses.removeEventListener(listener) }
     }
 
+    // Descargamos el inventario de buses
+    DisposableEffect(Unit) {
+        val database = FirebaseDatabase.getInstance()
+        val refInventario = database.getReference("buses")
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val nuevoInventario = mutableMapOf<String, BusOficial>()
+                for (busSnapshot in snapshot.children) {
+                    val busData = busSnapshot.getValue(BusOficial::class.java)
+                    if (busSnapshot.key != null && busData != null) {
+                        nuevoInventario[busSnapshot.key!!] = busData
+                    }
+                }
+                inventarioBuses = nuevoInventario
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(context, "Error cargando inventario: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+        refInventario.addValueEventListener(listener)
+        onDispose { refInventario.removeEventListener(listener) }
+    }
+
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(popayan, 13f)
@@ -5404,34 +5563,153 @@ fun MapaGeneralAdmin(onVolver: () -> Unit) {
     val iconoBusNormal = remember { obtenerIconoBus(context, R.drawable.ic_bus) }
     val iconoBusGris = remember { obtenerIconoBusGris(context, R.drawable.ic_bus) }
 
+// ... (Mantén tus variables de estado aquí arriba intactas) ...
+
     Box(modifier = Modifier.fillMaxSize()) {
+
+        // 1. EL MAPA BASE (Mantenemos tu lógica actual por ahora)
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = false)
+            properties = MapProperties(isMyLocationEnabled = false) // <--- Cambia esto a false
         ) {
-            flotaActiva.forEach { (idBus, posicion) ->
-                // Lógica de conectividad: Si la diferencia > 2 minutos (120,000 ms), está desconectado
-                val isDesconectado = (tiempoActual - posicion.hora_lectura) > 120_000L
+            flotaActiva.forEach { (idBus, busActivo) ->
+                val busEstatico = inventarioBuses[idBus]
+                
+                // Asignación de Placa y Ruta (con fallback si aún no descarga el dato)
+                val titulo = if (busEstatico != null) {
+                    "${busEstatico.placa} - Ruta ${busEstatico.id_ruta}"
+                } else {
+                    "Bus $idBus"
+                }
 
-                Marker(
-                    state = MarkerState(position = LatLng(posicion.latitud, posicion.longitud)),
-                    title = "Vehículo: $idBus",
-                    snippet = if (isDesconectado) "⚠️ Señal Perdida (+2 min)" else "🟢 Activo",
-                    icon = if (isDesconectado) iconoBusGris else iconoBusNormal
-                )
+                // Evaluación de color por conexión (2 minutos = 120000 ms)
+                val sinSenal = (System.currentTimeMillis() - busActivo.hora_lectura) > 120000
+
+                MarkerComposable(
+                    state = MarkerState(position = LatLng(busActivo.latitud, busActivo.longitud)),
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (sinSenal) Color(0xFFE53935) else Color.White
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Text(
+                                text = if (sinSenal) "Señal Perdida" else titulo,
+                                color = if (sinSenal) Color.White else Color(0xFF0F172A),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    color = if (sinSenal) Color(0xFFE53935) else Color(0xFF3B82F6),
+                                    shape = CircleShape
+                                )
+                                .border(2.dp, Color.White, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = if (sinSenal) Icons.Default.Warning else Icons.Default.DirectionsBus,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 
-        // Botón flotante para salir de la torre de control
-        androidx.compose.material3.FloatingActionButton(
+        // 2. BOTÓN DE RETROCESO (Arriba a la izquierda)
+        FloatingActionButton(
             onClick = onVolver,
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp),
-            containerColor = Color.White
+                .padding(top = 48.dp, start = 16.dp)
+                .size(48.dp)
+                .align(Alignment.TopStart),
+            containerColor = Color.White,
+            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
+            shape = CircleShape
         ) {
-            Text("⬅️")
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowLeft,
+                contentDescription = "Volver",
+                tint = Color(0xFF0F172A)
+            )
+        }
+
+        // 3. CABECERA CENTRAL (Torre de Control)
+        Card(
+            modifier = Modifier
+                .padding(top = 48.dp, start = 80.dp, end = 16.dp) // Deja espacio para el botón de volver
+                .fillMaxWidth()
+                .align(Alignment.TopCenter),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "TORRE DE CONTROL",
+                    color = Color(0xFF00BFA5), // Verde corporativo
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Flota en tiempo real",
+                    color = Color(0xFF0F172A),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Box(modifier = Modifier.size(8.dp).background(Color(0xFF00BFA5), CircleShape))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "${flotaActiva.size} buses conectados", // Conectado dinámicamente a tu estado
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
+        // 4. LEYENDA DE ESTADOS (Abajo a la derecha)
+        Card(
+            modifier = Modifier
+                .padding(bottom = 32.dp, end = 16.dp)
+                .align(Alignment.BottomEnd),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(8.dp).background(Color(0xFF00BFA5), CircleShape))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("En ruta", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Box(modifier = Modifier.size(8.dp).background(Color(0xFFE53935), CircleShape))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Sin señal", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
         }
     }
 }
@@ -5492,7 +5770,7 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC)) // Fondo gris claro
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
     ) {
         // Cabecera idéntica al mockup
         Row(
@@ -5665,10 +5943,10 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
                 }
             }
         }
-
+        
         Spacer(modifier = Modifier.height(8.dp))
 
-        // LISTA DE INFORMES
+        // PARTE SCROLLABLE
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaFiltrada) { informe ->
                 // Generamos un ID corto visual a partir del ID de Firebase para simular el TRP-XXXX
@@ -5734,18 +6012,24 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
                     }
                 }
             }
-        }
+            
+            item {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Botón Volver
-        OutlinedButton(
-            onClick = onVolver,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
-        ) {
-            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                    // Botón Volver
+                    OutlinedButton(
+                        onClick = onVolver,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                    ) {
+                        Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
         }
     }
 }
@@ -5920,6 +6204,218 @@ fun PantallaSplash(onSplashTerminado: () -> Unit) {
                         ) // Barra verde turquesa
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PantallaPlanificaViaje(
+    ubicacionPasajero: LatLng?,
+    rutasProcesadas: List<RutaOficial>,
+    paraderosProcesados: List<ParaderoOficial>,
+    busesEnZona: Map<String, LatLng>,
+    inventarioBuses: List<BusOficial>,
+    onVolver: () -> Unit,
+    onRutaSeleccionada: (String) -> Unit
+) {
+    var textoBusqueda by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC))
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onVolver) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+            }
+            Text("Planifica tu viaje", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+        }
+
+        // Origin / Destination Card
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Origen", fontSize = 12.sp, color = Color.Gray)
+                Text("Mi ubicación actual", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF2563EB))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFFE2E8F0))
+                Text("Destino", fontSize = 12.sp, color = Color.Gray)
+                OutlinedTextField(
+                    value = textoBusqueda,
+                    onValueChange = { textoBusqueda = it },
+                    placeholder = { Text("Ej: Campanario") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedContainerColor = Color.Transparent
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Results
+        val rutasSugeridas = if (textoBusqueda.isNotBlank()) {
+            val paraderosMatch = paraderosProcesados.filter { 
+                it.nombre.contains(textoBusqueda, ignoreCase = true) || it.direccion.contains(textoBusqueda, ignoreCase = true) 
+            }
+            val idsRutas = paraderosMatch.map { it.id_ruta }.distinct()
+            rutasProcesadas.filter { it.id in idsRutas || it.nombre_ruta.contains(textoBusqueda, ignoreCase = true) || it.destino.contains(textoBusqueda, ignoreCase = true) }
+        } else emptyList()
+        
+        if (textoBusqueda.isNotBlank()) {
+            Text("Rutas sugeridas", modifier = Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color.Gray)
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            LazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                items(rutasSugeridas) { ruta ->
+                    // Calculate ETA
+                    val busesDeEstaRuta = inventarioBuses.filter { it.id_ruta == ruta.id }.map { it.id }
+                    val ubicacionesBusesEstaRuta = busesEnZona.filterKeys { it in busesDeEstaRuta }.values
+                    val etaTexto = if (ubicacionPasajero != null && ubicacionesBusesEstaRuta.isNotEmpty()) {
+                        val distancias = ubicacionesBusesEstaRuta.map { calcularDistanciaMetros(ubicacionPasajero, it) }
+                        val distanciaMin = distancias.minOrNull() ?: 0f
+                        obtenerTextoETA(distanciaMin)
+                    } else {
+                        "Calculando..."
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onRutaSeleccionada(ruta.id) },
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(ruta.nombre_ruta, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B))
+                                Text("Hacia: ${ruta.destino}", fontSize = 14.sp, color = Color.Gray)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Próximo en:", fontSize = 10.sp, color = Color.Gray)
+                                Text(etaTexto, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF2563EB))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PantallaCuentaPasajero(
+    onCerrarSesion: () -> Unit,
+    onOpcionSeleccionada: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC))
+            .padding(16.dp)
+    ) {
+        // TopBar simple
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(
+                onClick = { /* por ahora no hace nada */ },
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+            }
+            Text("Mi Perfil", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Tarjeta Azul superior
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2563EB)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.padding(12.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Julio Mario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+                TextButton(onClick = { /* Editar */ }) {
+                    Text("Editar", color = Color.White)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Lista de opciones
+        val opciones = listOf(
+            "Notificaciones" to Icons.Default.Notifications,
+            "Ayuda" to Icons.Default.Help,
+            "Preguntas Frecuentes" to Icons.Default.Info,
+            "Sugerencias" to Icons.Default.Lightbulb,
+            "Reportar" to Icons.Default.Warning,
+            "Acerca de PopaBus" to Icons.Default.Info
+        )
+        
+        opciones.forEach { (texto, icono) ->
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { onOpcionSeleccionada(texto) }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icono, contentDescription = null, tint = Color.Gray)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(texto, fontWeight = FontWeight.Medium, color = Color.DarkGray)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        // Botón Cerrar Sesión
+        Button(
+            onClick = onCerrarSesion,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = Color(0xFFDC2626)),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp)
+        ) {
+            Text("Cerrar Sesión", fontWeight = FontWeight.Bold)
         }
     }
 }

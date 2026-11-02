@@ -32,7 +32,7 @@ class ServicioRastreoPasajero : Service() {
     private val flotaBuses = mutableMapOf<String, Location>()
     private val contadoresProximidad = mutableMapOf<String, Int>()
     
-    private var yaRegistrado = false
+    private var viajeRegistrado = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -113,7 +113,8 @@ class ServicioRastreoPasajero : Service() {
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                if (yaRegistrado) return
+                // Freno de concurrencia: si ya se registró, ignoramos nuevos GPS
+                if (viajeRegistrado) return
 
                 val locPasajero = locationResult.lastLocation ?: return
                 val resultadosDistancia = FloatArray(1)
@@ -135,8 +136,11 @@ class ServicioRastreoPasajero : Service() {
 
                         // 12 ciclos * 5 segundos = ~60 segundos constantes junto al bus
                         if (conteoActual >= 12) {
-                            registrarAbordajeAutomatico(idBus)
-                            break
+                            if (!viajeRegistrado) {
+                                viajeRegistrado = true
+                                registrarAbordajeAutomatico(idBus)
+                            }
+                            break // Ignoramos el resto del ciclo para no duplicar buses
                         }
                     } else {
                         // Si se aleja o es un falso positivo, el contador se reinicia a 0
@@ -155,7 +159,6 @@ class ServicioRastreoPasajero : Service() {
     }
 
     private fun registrarAbordajeAutomatico(idBus: String) {
-        yaRegistrado = true
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
 
         // Extraemos la ruta a la que pertenece ese bus de la colección "buses"
@@ -175,13 +178,28 @@ class ServicioRastreoPasajero : Service() {
 
             nuevaActividadRef.setValue(actividad).addOnSuccessListener {
                 Log.d("RastreoAbordaje", "Abordaje automático consolidado: $idBus en la ruta $idRuta")
-                stopSelf() // Apagamos el servicio automáticamente
+                detenerYLimpiarServicio()
             }.addOnFailureListener {
-                stopSelf()
+                Log.e("RastreoAbordaje", "Error guardando abordaje", it)
+                detenerYLimpiarServicio()
             }
         }.addOnFailureListener {
-            stopSelf()
+            Log.e("RastreoAbordaje", "Error obteniendo ruta del bus", it)
+            detenerYLimpiarServicio()
         }
+    }
+
+    private fun detenerYLimpiarServicio() {
+        // Detener las lecturas de GPS para que no sigan ejecutándose ni consumiendo batería
+        if (::fusedLocationClient.isInitialized && ::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
+        // Liberar el seguro del procesador de forma inmediata
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
+        // Destruir el servicio (el sistema llamará a onDestroy() completando la limpieza)
+        stopSelf()
     }
 
     override fun onDestroy() {
