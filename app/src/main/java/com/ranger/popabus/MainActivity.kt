@@ -2870,79 +2870,314 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
     when (subPantalla) {
         "MENU" -> {
             Column(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFF8FAFC)) // Color de fondo gris muy claro del mockup
+                    .padding(horizontal = 24.dp, vertical = 24.dp)
             ) {
+                // Cabecera
                 Text(
-                    "Panel de Administración",
-                    style = MaterialTheme.typography.headlineMedium
+                    text = "POPABUS",
+                    color = Color(0xFF0D9488),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp
                 )
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // --- NUEVO SPRINT 11: BOTÓN DE GESTIÓN HUMANA ---
-                Button(
-                    onClick = { subPantalla = "USUARIOS" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("👥 Gestión Humana")
+                    Text(
+                        text = "Panel de\nAdministración",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B),
+                        lineHeight = 30.sp
+                    )
+
+                    // Avatar simulado
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFE0E7FF),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text("Pepito Pérez", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E293B))
+                            Text("Administrador", fontSize = 10.sp, color = Color(0xFF64748B))
+                        }
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Subtítulo
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "VISTA GENERAL",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "¿Qué deseas gestionar?",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).background(Color(0xFF10B981), CircleShape))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("En línea", fontSize = 12.sp, color = Color(0xFF64748B))
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Al hacer clic, cambiamos a la pantalla de paraderos
-                Button(
-                    onClick = { subPantalla = "PARADEROS" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
-                ) {
-                    Text("🚌 Gestionar Paraderos")
+                // Grilla de 6 botones
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Botón 1: Gestión Humana
+                    Card(
+                        onClick = { subPantalla = "USUARIOS" },
+                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = Color(0xFF3B82F6),
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                            Text(
+                                "Gestión Humana",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            )
+                        }
+                    }
+
+                    // Botón 2: Paraderos
+                    Card(
+                        onClick = { subPantalla = "PARADEROS" },
+                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                // Aquí puedes usar tu ícono de paradero personalizado si lo tienes
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("📍", fontSize = 16.sp)
+                                }
+                            }
+                            Text(
+                                "Gestionar Paraderos",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            )
+                        }
+                    }
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = { subPantalla = "RUTAS" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
-                ) {
-                    Text("🗺️ Gestionar Rutas")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Botón 3: Rutas
+                    Card(
+                        onClick = { subPantalla = "RUTAS" },
+                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("🗺️", fontSize = 16.sp)
+                                }
+                            }
+                            Text(
+                                "Gestionar Rutas",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            )
+                        }
+                    }
+
+                    // Botón 4: Buses
+                    Card(
+                        onClick = { subPantalla = "BUSES" },
+                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsBus,
+                                    contentDescription = null,
+                                    tint = Color(0xFF3B82F6),
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                            Text(
+                                "Gestionar Buses",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            )
+                        }
+                    }
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = { subPantalla = "BUSES" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
-                ) {
-                    Text("🚐 Gestionar Buses")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Botón 5: Reportes
+                    Card(
+                        onClick = { subPantalla = "REPORTES" },
+                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("📥", fontSize = 16.sp)
+                                }
+                            }
+                            Text(
+                                "Buzón de Reportes",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            )
+                        }
+                    }
+
+                    // Botón 6: Informes
+                    Card(
+                        onClick = { subPantalla = "INFORMES" },
+                        modifier = Modifier.weight(1f).aspectRatio(1.2f),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("📊", fontSize = 16.sp)
+                                }
+                            }
+                            Text(
+                                "Gestión de Informes",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.align(Alignment.BottomStart)
+                            )
+                        }
+                    }
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = { subPantalla = "REPORTES" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
-                ) {
-                    Text("📊 Buzón de Reportes")
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
+                // Tarjeta Torre de Control
+                Card(
                     onClick = { subPantalla = "TORRE_CONTROL" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), // Verde muy claro
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color(0xFF6EE7B7)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
-                    Text("📡 Torre de Control (Mapa)")
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFE0E7FF),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("📡", fontSize = 16.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("MONITOREO EN TIEMPO REAL", color = Color(0xFF0D9488), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text("Torre de Control - Mapa", color = Color(0xFF1E293B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = { subPantalla = "INFORMES" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
-                ) {
-                    Text("📊 Gestión de Informes")
-                }
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.weight(1f))
 
+                // Botón Cerrar Sesión Rojo
                 Button(
                     onClick = onCerrarSesion,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)) // Rojo intenso
                 ) {
-                    Text("Cerrar Sesión")
+                    Text("→] Cerrar Sesión", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
@@ -2960,6 +3195,7 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionParaderos(onVolver: () -> Unit) {
     val context = LocalContext.current
@@ -2974,16 +3210,18 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
     var direccion by remember { mutableStateOf("") }
     var latitud by remember { mutableStateOf("") }
     var longitud by remember { mutableStateOf("") }
+
+    // Estado del Dropdown de Rutas
     var idRuta by remember { mutableStateOf("") }
     var expandedRuta by remember { mutableStateOf(false) }
 
-    // Estado para la lista en tiempo real
+    // Estados para las listas en tiempo real
     var listaParaderos by remember { mutableStateOf<List<ParaderoOficial>>(emptyList()) }
     var listaRutas by remember { mutableStateOf<List<RutaOficial>>(emptyList()) }
 
-    // Descargamos los paraderos y rutas de Firebase en tiempo real
+    // Descargamos Paraderos y Rutas de Firebase en tiempo real
     DisposableEffect(Unit) {
-        val listener = object : ValueEventListener {
+        val listenerParaderos = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val paraderos = mutableListOf<ParaderoOficial>()
                 for (hijo in snapshot.children) {
@@ -2994,7 +3232,6 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                 }
                 listaParaderos = paraderos
             }
-
             override fun onCancelled(error: DatabaseError) {
                 Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
             }
@@ -3010,75 +3247,203 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                 }
                 listaRutas = rutas
             }
-
             override fun onCancelled(error: DatabaseError) {}
         }
-        refParaderos.addValueEventListener(listener)
+
+        refParaderos.addValueEventListener(listenerParaderos)
         refRutas.addValueEventListener(listenerRutas)
+
         onDispose {
-            refParaderos.removeEventListener(listener)
+            refParaderos.removeEventListener(listenerParaderos)
             refRutas.removeEventListener(listenerRutas)
         }
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC)) // Fondo gris claro
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        Text("Gestión de Paraderos", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
+        // Cabecera idéntica al mockup
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, shape = CircleShape)
+                    .clickable { onVolver() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color(0xFF1E293B)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "POPABUS · SOTRACAUCA",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Paraderos",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
-        // Formulario alineado a tu diccionario de datos
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Textos de subtítulo
+        Text(
+            text = "RED DE PARADAS",
+            color = Color(0xFF0D9488),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = "Crea y consulta los puntos autorizados.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // FORMULARIO DE CREACIÓN
         OutlinedTextField(
             value = nombre,
             onValueChange = { nombre = it },
-            label = { Text("Nombre (Ej: Parque Caldas)") },
+            label = { Text("Nombre (Ej: Terminal Norte)") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.White,
+                unfocusedBorderColor = Color.Transparent
+            )
         )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = direccion,
             onValueChange = { direccion = it },
-            label = { Text("Dirección") },
+            label = { Text("Dirección (Calle o carrera)") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.White,
+                unfocusedBorderColor = Color.Transparent
+            )
         )
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = latitud,
-            onValueChange = { latitud = it },
-            label = { Text("Latitud (Ej: 2.4419)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = latitud,
+                onValueChange = { latitud = it },
+                label = { Text("Latitud") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+            OutlinedTextField(
+                value = longitud,
+                onValueChange = { longitud = it },
+                label = { Text("Longitud") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = longitud,
-            onValueChange = { longitud = it },
-            label = { Text("Longitud (Ej: -76.6063)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = idRuta,
-            onValueChange = { idRuta = it },
-            label = { Text("ID de la Ruta (Ej: RUTA_RECORRIDO_1)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+
+        // DROPDOWN NUEVO PARA ASIGNAR RUTA
+        val nombreRutaSeleccionada = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta asignada"
+
+        ExposedDropdownMenuBox(
+            expanded = expandedRuta,
+            onExpandedChange = { expandedRuta = !expandedRuta }
+        ) {
+            OutlinedTextField(
+                value = nombreRutaSeleccionada,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Asignar a Ruta Oficial") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRuta) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+            ExposedDropdownMenu(
+                expanded = expandedRuta,
+                onDismissRequest = { expandedRuta = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sin ruta asignada") },
+                    onClick = {
+                        idRuta = ""
+                        expandedRuta = false
+                    }
+                )
+                listaRutas.forEach { ruta ->
+                    DropdownMenuItem(
+                        text = { Text(ruta.nombre_ruta) },
+                        onClick = {
+                            idRuta = ruta.id // Guardamos el ID real en la variable
+                            expandedRuta = false
+                        }
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Botón Crear Paradero (Azul vibrante)
         Button(
             onClick = {
                 val lat = latitud.toDoubleOrNull()
                 val lng = longitud.toDoubleOrNull()
 
                 if (nombre.isNotEmpty() && lat != null && lng != null) {
-                    val nuevoParaderoRef = refParaderos.push() // Firebase genera el _id
-                    val geohash = calcularGeohash(lat, lng) // Reutilizamos tu algoritmo nativo
+                    val nuevoParaderoRef = refParaderos.push()
+                    val geohash = calcularGeohash(lat, lng)
 
                     val nuevoParadero = ParaderoOficial(
                         nombre = nombre,
@@ -3087,7 +3452,7 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                         longitud = lng,
                         geohash = geohash,
                         estado = "activo",
-                        id_ruta = idRuta.trim()
+                        id_ruta = idRuta.trim() // El ID seleccionado se guarda aquí
                     )
 
                     nuevoParaderoRef.setValue(nuevoParadero).addOnSuccessListener {
@@ -3101,50 +3466,76 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                         Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(
-                        context,
-                        "Llene nombre y coordenadas numéricas válidas",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(context, "Llene nombre y coordenadas válidas", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
         ) {
-            Text("➕ Crear Paradero")
+            Text("➕ Crear Paradero", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            "Paraderos Registrados: ${listaParaderos.size}",
-            style = MaterialTheme.typography.titleMedium
-        )
+        // Encabezado de la lista con Badge
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Paraderos registrados", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = listaParaderos.size.toString(), color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual para ver lo que hay en Firebase
+        // LISTA DE PARADEROS
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaParaderos) { paradero ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
+                        .padding(vertical = 6.dp)
                         .clickable { paraderoSeleccionado = paradero },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "📍 ${paradero.nombre}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "Dir: ${paradero.direccion}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            "Geo: ${paradero.latitud}, ${paradero.longitud}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFEFF6FF),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("📍", fontSize = 16.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = paradero.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
+                            Text(text = paradero.direccion, fontSize = 12.sp, color = Color(0xFF64748B))
+                            Text(text = "${paradero.latitud}, ${paradero.longitud}", fontSize = 10.sp, color = Color(0xFF94A3B8))
+
+                            val rutaVinculada = listaRutas.find { it.id == paradero.id_ruta }?.nombre_ruta
+                            if (rutaVinculada != null) {
+                                Text(text = "Ruta: $rutaVinculada", fontSize = 10.sp, color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -3152,119 +3543,129 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (paraderoSeleccionado != null) {
-            val paradero = paraderoSeleccionado!!
-            var editNombre by remember(paradero) { mutableStateOf(paradero.nombre) }
-            var editDireccion by remember(paradero) { mutableStateOf(paradero.direccion) }
-            var editIdRuta by remember(paradero) { mutableStateOf(paradero.id_ruta) }
-
-            AlertDialog(
-                onDismissRequest = { paraderoSeleccionado = null },
-                title = {
-                    Text(
-                        "Editar Paradero",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = editNombre,
-                            onValueChange = { editNombre = it },
-                            label = { Text("Nombre") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editDireccion,
-                            onValueChange = { editDireccion = it },
-                            label = { Text("Dirección") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editIdRuta,
-                            onValueChange = { editIdRuta = it },
-                            label = { Text("ID de Ruta") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "Geo: ${paradero.latitud}, ${paradero.longitud}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        if (editNombre.isNotBlank() && editDireccion.isNotBlank()) {
-                            val actualizaciones = mapOf(
-                                "nombre" to editNombre,
-                                "direccion" to editDireccion,
-                                "id_ruta" to editIdRuta.trim()
-                            )
-                            refParaderos.child(paradero.id).updateChildren(actualizaciones)
-                                .addOnSuccessListener {
-                                    Toast.makeText(
-                                        context,
-                                        "Paradero actualizado",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    paraderoSeleccionado = null
-                                }.addOnFailureListener {
-                                Toast.makeText(
-                                    context,
-                                    "Error al actualizar",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Los campos no pueden estar vacíos",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }) {
-                        Text("Guardar Cambios")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            refParaderos.child(paradero.id).removeValue().addOnSuccessListener {
-                                Toast.makeText(
-                                    context,
-                                    "Paradero eliminado definitivamente",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                paraderoSeleccionado = null
-                            }.addOnFailureListener {
-                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-                    ) {
-                        Text("🗑️ Borrar Definitivamente")
-                    }
-                }
-            )
-        }
-
-        Button(
+        // Botón Volver
+        OutlinedButton(
             onClick = onVolver,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
         ) {
-            Text("Volver al Menú")
+            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
         }
+    }
+
+    // --- DIÁLOGO DE EDICIÓN CON DROPDOWN ---
+    if (paraderoSeleccionado != null) {
+        val paradero = paraderoSeleccionado!!
+        var editNombre by remember(paradero) { mutableStateOf(paradero.nombre) }
+        var editDireccion by remember(paradero) { mutableStateOf(paradero.direccion) }
+        var editIdRuta by remember(paradero) { mutableStateOf(paradero.id_ruta) }
+
+        var expandedEditRuta by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { paraderoSeleccionado = null },
+            title = { Text("Editar Paradero", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = editNombre,
+                        onValueChange = { editNombre = it },
+                        label = { Text("Nombre") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editDireccion,
+                        onValueChange = { editDireccion = it },
+                        label = { Text("Dirección") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // DROPDOWN PARA EDICIÓN
+                    val nombreEditRuta = listaRutas.find { it.id == editIdRuta }?.nombre_ruta ?: "Sin ruta asignada"
+
+                    ExposedDropdownMenuBox(
+                        expanded = expandedEditRuta,
+                        onExpandedChange = { expandedEditRuta = !expandedEditRuta }
+                    ) {
+                        OutlinedTextField(
+                            value = nombreEditRuta,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Cambiar Ruta") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedEditRuta) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedEditRuta,
+                            onDismissRequest = { expandedEditRuta = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Sin ruta asignada") },
+                                onClick = {
+                                    editIdRuta = ""
+                                    expandedEditRuta = false
+                                }
+                            )
+                            listaRutas.forEach { ruta ->
+                                DropdownMenuItem(
+                                    text = { Text(ruta.nombre_ruta) },
+                                    onClick = {
+                                        editIdRuta = ruta.id
+                                        expandedEditRuta = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Geo: ${paradero.latitud}, ${paradero.longitud}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editNombre.isNotBlank() && editDireccion.isNotBlank()) {
+                        val actualizaciones = mapOf(
+                            "nombre" to editNombre,
+                            "direccion" to editDireccion,
+                            "id_ruta" to editIdRuta.trim()
+                        )
+                        refParaderos.child(paradero.id).updateChildren(actualizaciones).addOnSuccessListener {
+                            Toast.makeText(context, "Paradero actualizado", Toast.LENGTH_SHORT).show()
+                            paraderoSeleccionado = null
+                        }.addOnFailureListener {
+                            Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Los campos no pueden estar vacíos", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("Guardar Cambios")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        refParaderos.child(paradero.id).removeValue().addOnSuccessListener {
+                            Toast.makeText(context, "Paradero eliminado", Toast.LENGTH_SHORT).show()
+                            paraderoSeleccionado = null
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("🗑️ Borrar")
+                }
+            }
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionRutas(onVolver: () -> Unit) {
     val context = LocalContext.current
@@ -3304,50 +3705,133 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC)) // Fondo gris claro
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        Text("Gestión de Rutas", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
+        // Cabecera idéntica al mockup
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, shape = CircleShape)
+                    .clickable { onVolver() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color(0xFF1E293B)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "POPABUS · SOTRACAUCA",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Gestión de Rutas",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
-        // Formulario alineado a tu diccionario de datos
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Textos de subtítulo
+        Text(
+            text = "OPERACIÓN",
+            color = Color(0xFF0D9488),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = "Configura recorridos base para la flota.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // FORMULARIO DE CREACIÓN
         OutlinedTextField(
             value = nombreRuta,
             onValueChange = { nombreRuta = it },
-            label = { Text("Nombre (Ej: Línea 1)") },
+            label = { Text("Nombre (Ej: Ruta 12)") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.White,
+                unfocusedBorderColor = Color.Transparent
+            )
         )
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = origen,
-            onValueChange = { origen = it },
-            label = { Text("Origen (Ej: Norte)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = destino,
-            onValueChange = { destino = it },
-            label = { Text("Destino (Ej: Centro)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = origen,
+                onValueChange = { origen = it },
+                label = { Text("Origen (Punto inicial)") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+            OutlinedTextField(
+                value = destino,
+                onValueChange = { destino = it },
+                label = { Text("Destino (Punto final)") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Botón Crear Ruta Base
         Button(
             onClick = {
                 if (nombreRuta.isNotEmpty() && origen.isNotEmpty() && destino.isNotEmpty()) {
-                    val nuevaRutaRef = refRutas.push() // Firebase genera el _id
+                    val nuevaRutaRef = refRutas.push()
 
                     val nuevaRuta = RutaOficial(
                         nombre_ruta = nombreRuta,
                         origen = origen,
                         destino = destino,
                         estado = "activa"
-                        // paraderos y geometria inician vacíos, listos para ser llenados luego
                     )
 
                     nuevaRutaRef.setValue(nuevaRuta).addOnSuccessListener {
@@ -3359,50 +3843,98 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
                         Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(
-                        context,
-                        "Por favor llene todos los campos",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(context, "Por favor llene todos los campos", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
         ) {
-            Text("➕ Crear Ruta Base")
+            Text("➕ Crear Ruta Base", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            "Rutas Registradas: ${listaRutas.size}",
-            style = MaterialTheme.typography.titleMedium
-        )
+        // Encabezado de la lista con Badge
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Rutas activas", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = listaRutas.size.toString(), color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual para ver lo que hay en Firebase
+        // LISTA DE RUTAS
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaRutas) { ruta ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
+                        .padding(vertical = 6.dp)
                         .clickable { rutaSeleccionada = ruta },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "🗺️ ${ruta.nombre_ruta}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "De: ${ruta.origen} ➔ A: ${ruta.destino}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            "Estado: ${ruta.estado}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
+                    Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("🗺️", fontSize = 16.sp)
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(text = ruta.nombre_ruta, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B), modifier = Modifier.weight(1f))
+
+                            // Badge Estado
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (ruta.estado == "activa") Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                                border = BorderStroke(1.dp, if (ruta.estado == "activa") Color(0xFF10B981) else Color(0xFFEF4444))
+                            ) {
+                                Text(
+                                    text = if (ruta.estado == "activa") "Activa" else "Inactiva",
+                                    color = if (ruta.estado == "activa") Color(0xFF10B981) else Color(0xFFEF4444),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Fila de Origen y Destino con fondo gris
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFF8FAFC),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = ruta.origen, fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text(text = "→", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                                Text(text = ruta.destino, fontSize = 12.sp, color = Color(0xFF64748B))
+                            }
+                        }
                     }
                 }
             }
@@ -3410,105 +3942,107 @@ fun PantallaGestionRutas(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (rutaSeleccionada != null) {
-            val ruta = rutaSeleccionada!!
-            var editNombre by remember(ruta) { mutableStateOf(ruta.nombre_ruta) }
-            var editOrigen by remember(ruta) { mutableStateOf(ruta.origen) }
-            var editDestino by remember(ruta) { mutableStateOf(ruta.destino) }
+        // Botón Volver
+        OutlinedButton(
+            onClick = onVolver,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+        ) {
+            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+        }
+    }
 
-            AlertDialog(
-                onDismissRequest = { rutaSeleccionada = null },
-                title = { Text("Editar Ruta", style = MaterialTheme.typography.titleLarge) },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = editNombre,
-                            onValueChange = { editNombre = it },
-                            label = { Text("Nombre") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editOrigen,
-                            onValueChange = { editOrigen = it },
-                            label = { Text("Origen") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editDestino,
-                            onValueChange = { editDestino = it },
-                            label = { Text("Destino") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        if (editNombre.isNotBlank() && editOrigen.isNotBlank() && editDestino.isNotBlank()) {
-                            val actualizaciones = mapOf(
-                                "nombre_ruta" to editNombre,
-                                "origen" to editOrigen,
-                                "destino" to editDestino
-                            )
-                            refRutas.child(ruta.id).updateChildren(actualizaciones)
-                                .addOnSuccessListener {
-                                    Toast.makeText(
-                                        context,
-                                        "Ruta actualizada",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    rutaSeleccionada = null
-                                }.addOnFailureListener {
-                                Toast.makeText(
-                                    context,
-                                    "Error al actualizar",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Los campos no pueden estar vacíos",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }) {
-                        Text("Guardar Cambios")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            refRutas.child(ruta.id).removeValue().addOnSuccessListener {
-                                Toast.makeText(
-                                    context,
-                                    "Ruta eliminada definitivamente",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                rutaSeleccionada = null
-                            }.addOnFailureListener {
-                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+    // --- DIÁLOGO DE EDICIÓN CON LÓGICA INTACTA ---
+    if (rutaSeleccionada != null) {
+        val ruta = rutaSeleccionada!!
+        var editNombre by remember(ruta) { mutableStateOf(ruta.nombre_ruta) }
+        var editOrigen by remember(ruta) { mutableStateOf(ruta.origen) }
+        var editDestino by remember(ruta) { mutableStateOf(ruta.destino) }
+        var editEstado by remember(ruta) { mutableStateOf(ruta.estado) } // Agregado para poder activar/desactivar
+
+        AlertDialog(
+            onDismissRequest = { rutaSeleccionada = null },
+            title = { Text("Editar Ruta", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = editNombre,
+                        onValueChange = { editNombre = it },
+                        label = { Text("Nombre") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editOrigen,
+                        onValueChange = { editOrigen = it },
+                        label = { Text("Origen") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editDestino,
+                        onValueChange = { editDestino = it },
+                        label = { Text("Destino") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Toggle para activar o desactivar la ruta
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("🗑️ Borrar Definitivamente")
+                        Text("Estado de la Ruta:")
+                        Switch(
+                            checked = editEstado == "activa",
+                            onCheckedChange = { isChecked -> editEstado = if (isChecked) "activa" else "inactiva" }
+                        )
                     }
                 }
-            )
-        }
-
-        Button(
-            onClick = onVolver,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-        ) {
-            Text("Volver al Menú")
-        }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editNombre.isNotBlank() && editOrigen.isNotBlank() && editDestino.isNotBlank()) {
+                        val actualizaciones = mapOf(
+                            "nombre_ruta" to editNombre,
+                            "origen" to editOrigen,
+                            "destino" to editDestino,
+                            "estado" to editEstado
+                        )
+                        refRutas.child(ruta.id).updateChildren(actualizaciones).addOnSuccessListener {
+                            Toast.makeText(context, "Ruta actualizada", Toast.LENGTH_SHORT).show()
+                            rutaSeleccionada = null
+                        }.addOnFailureListener {
+                            Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Los campos no pueden estar vacíos", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("Guardar Cambios")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        refRutas.child(ruta.id).removeValue().addOnSuccessListener {
+                            Toast.makeText(context, "Ruta eliminada definitivamente", Toast.LENGTH_SHORT).show()
+                            rutaSeleccionada = null
+                        }.addOnFailureListener {
+                            Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("🗑️ Borrar Definitivamente")
+                }
+            }
+        )
     }
 }
 
@@ -3546,7 +4080,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 }
                 listaBuses = buses
             }
-
             override fun onCancelled(error: DatabaseError) {
                 Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
             }
@@ -3565,7 +4098,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 }
                 listaRutas = rutas
             }
-
             override fun onCancelled(error: DatabaseError) {}
         }
         refRutas.addValueEventListener(listenerRutas)
@@ -3582,7 +4114,6 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 }
                 listaConductores = usuarios
             }
-
             override fun onCancelled(error: DatabaseError) {}
         }
         refUsuarios.addValueEventListener(listenerUsuarios)
@@ -3595,34 +4126,111 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC)) // Fondo gris claro
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        Text("Gestión de Vehículos", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
+        // Cabecera idéntica al mockup
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, shape = CircleShape)
+                    .clickable { onVolver() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color(0xFF1E293B)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "POPABUS · SOTRACAUCA",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Vehículos",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
-        // Formulario alineado a tu diccionario de datos
-        OutlinedTextField(
-            value = placa,
-            onValueChange = { placa = it },
-            label = { Text("Placa (Ej: TJU-123)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Textos de subtítulo
+        Text(
+            text = "FLOTA SOTRACAUCA",
+            color = Color(0xFF0D9488),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = modelo,
-            onValueChange = { modelo = it },
-            label = { Text("Modelo/Año") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+        Text(
+            text = "Registra buses y asigna su operación.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
+
+        // FORMULARIO DE CREACIÓN
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = placa,
+                onValueChange = { placa = it },
+                label = { Text("Placa (Ej: ABC-123)") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+            OutlinedTextField(
+                value = modelo,
+                onValueChange = { modelo = it },
+                label = { Text("Modelo (Marca/línea)") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- DROPDOWN RUTAS ---
         var expandedRuta by remember { mutableStateOf(false) }
-        val nombreRutaSeleccionada =
-            listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta asignada"
+        val nombreRutaSeleccionada = listaRutas.find { it.id == idRuta }?.nombre_ruta ?: "Sin ruta asignada"
 
         ExposedDropdownMenuBox(
             expanded = expandedRuta,
@@ -3634,8 +4242,13 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 readOnly = true,
                 label = { Text("Asignar Ruta") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRuta) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
             )
             ExposedDropdownMenu(
                 expanded = expandedRuta,
@@ -3664,9 +4277,7 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
         // --- DROPDOWN CONDUCTORES ---
         var expandedConductor by remember { mutableStateOf(false) }
-        val nombreConductorSeleccionado =
-            listaConductores.find { it.id == idConductor }?.nombre_completo
-                ?: "Sin conductor asignado"
+        val nombreConductorSeleccionado = listaConductores.find { it.id == idConductor }?.nombre_completo ?: "Sin conductor asignado"
 
         ExposedDropdownMenuBox(
             expanded = expandedConductor,
@@ -3678,8 +4289,13 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                 readOnly = true,
                 label = { Text("Asignar Conductor") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedConductor) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Transparent
+                )
             )
             ExposedDropdownMenu(
                 expanded = expandedConductor,
@@ -3706,11 +4322,11 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Botón Registrar Bus
         Button(
             onClick = {
                 if (placa.isNotEmpty()) {
-                    val nuevoBusRef = refBuses.push() // Firebase genera el _id
-
+                    val nuevoBusRef = refBuses.push()
                     val nuevoBus = BusOficial(
                         placa = placa,
                         modelo = modelo,
@@ -3729,57 +4345,85 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
                         Toast.makeText(context, "Error al guardar", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(context, "La placa es obligatoria", Toast.LENGTH_SHORT)
-                        .show()
+                    Toast.makeText(context, "La placa es obligatoria", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
         ) {
-            Text("➕ Registrar Bus")
+            Text("➕ Registrar Bus", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            "Vehículos Registrados: ${listaBuses.size}",
-            style = MaterialTheme.typography.titleMedium
-        )
+        // Encabezado de la lista con Badge
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Vehículos registrados", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = listaBuses.size.toString(), color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista visual para ver lo que hay en Firebase
+        // LISTA DE BUSES
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaBuses) { bus ->
-                val nombreRuta =
-                    listaRutas.find { it.id == bus.id_ruta }?.nombre_ruta ?: "Ninguna"
-                val nombreConductor =
-                    listaConductores.find { it.id == bus.id_conductor_actual }?.nombre_completo
-                        ?: "Ninguno"
+                val nombreRutaList = listaRutas.find { it.id == bus.id_ruta }?.nombre_ruta ?: "Ninguna"
+                val nombreConductorList = listaConductores.find { it.id == bus.id_conductor_actual }?.nombre_completo ?: "Ninguno"
 
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
+                        .padding(vertical = 6.dp)
                         .clickable { busSeleccionado = bus },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "🚐 Placa: ${bus.placa}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "Modelo: ${bus.modelo} | Estado: ${bus.estado}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            "Ruta Asignada: $nombreRuta",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                        Text(
-                            "Conductor: $nombreConductor",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFEFF6FF),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsBus,
+                                    contentDescription = null,
+                                    tint = Color(0xFF3B82F6),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = bus.placa, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B))
+                            Text(text = bus.modelo.ifEmpty { "Sin modelo" }, fontSize = 12.sp, color = Color(0xFF64748B))
+                            Text(text = "$nombreRutaList - $nombreConductorList", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                        }
+
+                        // Badge de estado verde/rojo
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(if (bus.estado == "activo") Color(0xFF10B981) else Color(0xFFEF4444), CircleShape)
                         )
                     }
                 }
@@ -3788,200 +4432,183 @@ fun PantallaGestionBuses(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (busSeleccionado != null) {
-            val bus = busSeleccionado!!
-            var editPlaca by remember(bus) { mutableStateOf(bus.placa) }
-            var editModelo by remember(bus) { mutableStateOf(bus.modelo) }
-            var editRuta by remember(bus) { mutableStateOf(bus.id_ruta) }
-            var editConductor by remember(bus) { mutableStateOf(bus.id_conductor_actual) }
+        // Botón Volver
+        OutlinedButton(
+            onClick = onVolver,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+        ) {
+            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+        }
+    }
 
-            AlertDialog(
-                onDismissRequest = { busSeleccionado = null },
-                title = {
-                    Text(
-                        "Editar Vehículo",
-                        style = MaterialTheme.typography.titleLarge
+    // --- DIÁLOGO DE EDICIÓN CON DROPDOWNS ---
+    if (busSeleccionado != null) {
+        val bus = busSeleccionado!!
+        var editPlaca by remember(bus) { mutableStateOf(bus.placa) }
+        var editModelo by remember(bus) { mutableStateOf(bus.modelo) }
+        var editRuta by remember(bus) { mutableStateOf(bus.id_ruta) }
+        var editConductor by remember(bus) { mutableStateOf(bus.id_conductor_actual) }
+        var editEstado by remember(bus) { mutableStateOf(bus.estado) }
+
+        AlertDialog(
+            onDismissRequest = { busSeleccionado = null },
+            title = { Text("Editar Vehículo", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = editPlaca,
+                        onValueChange = { editPlaca = it },
+                        label = { Text("Placa") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
-                },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = editPlaca,
-                            onValueChange = { editPlaca = it },
-                            label = { Text("Placa") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editModelo,
-                            onValueChange = { editModelo = it },
-                            label = { Text("Modelo/Año") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editModelo,
+                        onValueChange = { editModelo = it },
+                        label = { Text("Modelo/Año") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                        // --- DROPDOWN EDITAR RUTA ---
-                        var expandedEditRuta by remember { mutableStateOf(false) }
-                        val nombreEditRuta = listaRutas.find { it.id == editRuta }?.nombre_ruta
-                            ?: "Sin ruta asignada"
+                    // --- DROPDOWN EDITAR RUTA ---
+                    var expandedEditRuta by remember { mutableStateOf(false) }
+                    val nombreEditRuta = listaRutas.find { it.id == editRuta }?.nombre_ruta ?: "Sin ruta asignada"
 
-                        ExposedDropdownMenuBox(
+                    ExposedDropdownMenuBox(
+                        expanded = expandedEditRuta,
+                        onExpandedChange = { expandedEditRuta = !expandedEditRuta }
+                    ) {
+                        OutlinedTextField(
+                            value = nombreEditRuta,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Reasignar Ruta") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedEditRuta) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
                             expanded = expandedEditRuta,
-                            onExpandedChange = { expandedEditRuta = !expandedEditRuta }
+                            onDismissRequest = { expandedEditRuta = false }
                         ) {
-                            OutlinedTextField(
-                                value = nombreEditRuta,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Asignar Ruta") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(
-                                        expanded = expandedEditRuta
-                                    )
-                                },
-                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            DropdownMenuItem(
+                                text = { Text("Sin ruta asignada") },
+                                onClick = {
+                                    editRuta = ""
+                                    expandedEditRuta = false
+                                }
                             )
-                            ExposedDropdownMenu(
-                                expanded = expandedEditRuta,
-                                onDismissRequest = { expandedEditRuta = false }
-                            ) {
+                            listaRutas.forEach { ruta ->
                                 DropdownMenuItem(
-                                    text = { Text("Sin ruta asignada") },
+                                    text = { Text(ruta.nombre_ruta) },
                                     onClick = {
-                                        editRuta = ""
+                                        editRuta = ruta.id
                                         expandedEditRuta = false
                                     }
                                 )
-                                listaRutas.forEach { ruta ->
-                                    DropdownMenuItem(
-                                        text = { Text(ruta.nombre_ruta) },
-                                        onClick = {
-                                            editRuta = ruta.id
-                                            expandedEditRuta = false
-                                        }
-                                    )
-                                }
                             }
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                        // --- DROPDOWN EDITAR CONDUCTOR ---
-                        var expandedEditConductor by remember { mutableStateOf(false) }
-                        val nombreEditConductor =
-                            listaConductores.find { it.id == editConductor }?.nombre_completo
-                                ?: "Sin conductor asignado"
+                    // --- DROPDOWN EDITAR CONDUCTOR ---
+                    var expandedEditConductor by remember { mutableStateOf(false) }
+                    val nombreEditConductor = listaConductores.find { it.id == editConductor }?.nombre_completo ?: "Sin conductor asignado"
 
-                        ExposedDropdownMenuBox(
+                    ExposedDropdownMenuBox(
+                        expanded = expandedEditConductor,
+                        onExpandedChange = { expandedEditConductor = !expandedEditConductor }
+                    ) {
+                        OutlinedTextField(
+                            value = nombreEditConductor,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Reasignar Conductor") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedEditConductor) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
                             expanded = expandedEditConductor,
-                            onExpandedChange = {
-                                expandedEditConductor = !expandedEditConductor
-                            }
+                            onDismissRequest = { expandedEditConductor = false }
                         ) {
-                            OutlinedTextField(
-                                value = nombreEditConductor,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Asignar Conductor") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(
-                                        expanded = expandedEditConductor
-                                    )
-                                },
-                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            DropdownMenuItem(
+                                text = { Text("Sin conductor asignado") },
+                                onClick = {
+                                    editConductor = ""
+                                    expandedEditConductor = false
+                                }
                             )
-                            ExposedDropdownMenu(
-                                expanded = expandedEditConductor,
-                                onDismissRequest = { expandedEditConductor = false }
-                            ) {
+                            listaConductores.forEach { conductor ->
                                 DropdownMenuItem(
-                                    text = { Text("Sin conductor asignado") },
+                                    text = { Text(conductor.nombre_completo) },
                                     onClick = {
-                                        editConductor = ""
+                                        editConductor = conductor.id
                                         expandedEditConductor = false
                                     }
                                 )
-                                listaConductores.forEach { conductor ->
-                                    DropdownMenuItem(
-                                        text = { Text(conductor.nombre_completo) },
-                                        onClick = {
-                                            editConductor = conductor.id
-                                            expandedEditConductor = false
-                                        }
-                                    )
-                                }
                             }
                         }
                     }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        if (editPlaca.isNotBlank()) {
-                            val actualizaciones = mapOf(
-                                "placa" to editPlaca,
-                                "modelo" to editModelo,
-                                "id_ruta" to editRuta,
-                                "id_conductor_actual" to editConductor
-                            )
-                            refBuses.child(bus.id).updateChildren(actualizaciones)
-                                .addOnSuccessListener {
-                                    Toast.makeText(
-                                        context,
-                                        "Vehículo actualizado",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    busSeleccionado = null
-                                }.addOnFailureListener {
-                                Toast.makeText(
-                                    context,
-                                    "Error al actualizar",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "La placa no puede estar vacía",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }) {
-                        Text("Guardar Cambios")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            refBuses.child(bus.id).removeValue().addOnSuccessListener {
-                                Toast.makeText(
-                                    context,
-                                    "Vehículo eliminado definitivamente",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                busSeleccionado = null
-                            }.addOnFailureListener {
-                                Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Toggle de estado (Activo/Inactivo)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("🗑️ Borrar Definitivamente")
+                        Text("Estado del Bus:")
+                        Switch(
+                            checked = editEstado == "activo",
+                            onCheckedChange = { isChecked -> editEstado = if (isChecked) "activo" else "inactivo" }
+                        )
                     }
                 }
-            )
-        }
-
-        Button(
-            onClick = onVolver,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-        ) {
-            Text("Volver al Menú")
-        }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editPlaca.isNotBlank()) {
+                        val actualizaciones = mapOf(
+                            "placa" to editPlaca,
+                            "modelo" to editModelo,
+                            "id_ruta" to editRuta,
+                            "id_conductor_actual" to editConductor,
+                            "estado" to editEstado
+                        )
+                        refBuses.child(bus.id).updateChildren(actualizaciones).addOnSuccessListener {
+                            Toast.makeText(context, "Vehículo actualizado", Toast.LENGTH_SHORT).show()
+                            busSeleccionado = null
+                        }.addOnFailureListener {
+                            Toast.makeText(context, "Error al actualizar", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "La placa no puede estar vacía", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("Guardar Cambios")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        refBuses.child(bus.id).removeValue().addOnSuccessListener {
+                            Toast.makeText(context, "Vehículo eliminado definitivamente", Toast.LENGTH_SHORT).show()
+                            busSeleccionado = null
+                        }.addOnFailureListener {
+                            Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("🗑️ Borrar Definitivamente")
+                }
+            }
+        )
     }
 }
 
@@ -4025,6 +4652,8 @@ fun DialogoReportarIncidencia(onDismiss: () -> Unit, onEnviar: (String) -> Unit)
 // --- NUEVA PANTALLA PARA EL SPRINT 11 ---
 // --- PANTALLA GESTIÓN DE USUARIOS (SPRINT 11) ---
 // --- PANTALLA GESTIÓN DE USUARIOS (SPRINT 11) ---
+// --- PANTALLA GESTIÓN DE USUARIOS (SPRINT 11 - REDISEÑO) ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionUsuarios(onVolver: () -> Unit) {
     val context = LocalContext.current
@@ -4033,8 +4662,6 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
 
     // Estado para la lista de usuarios en tiempo real
     var listaUsuarios by remember { mutableStateOf<List<UsuarioOficial>>(emptyList()) }
-
-    // Estado para el CRUD profundo de un usuario específico
     var usuarioSeleccionado by remember { mutableStateOf<UsuarioOficial?>(null) }
 
     // Descargamos los usuarios de Firebase en tiempo real
@@ -4050,7 +4677,6 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
                 }
                 listaUsuarios = usuarios
             }
-
             override fun onCancelled(error: DatabaseError) {
                 Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
             }
@@ -4074,66 +4700,102 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC)) // Fondo gris claro
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        Text("Gestión Humana", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // TAB ROW (Pestañas)
-        androidx.compose.material3.TabRow(selectedTabIndex = tabIndex) {
-            tabs.forEachIndexed { index, title ->
-                androidx.compose.material3.Tab(
-                    selected = tabIndex == index,
-                    onClick = { tabIndex = index },
-                    text = { Text(title) }
+        // Cabecera idéntica al mockup
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, shape = CircleShape)
+                    .clickable { onVolver() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color(0xFF1E293B)
                 )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "POPABUS · SOTRACAUCA",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Gestión Humana",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(24.dp))
 
+        // Textos de subtítulo
         Text(
-            "Usuarios en esta categoría: ${usuariosFiltrados.size}",
-            style = MaterialTheme.typography.titleMedium
+            text = "DIRECTORIO",
+            color = Color(0xFF0D9488),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Administra usuarios y permisos del sistema.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
 
-        // Lista visual con funcionalidad CRUD
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            items(usuariosFiltrados) { usuario ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable {
-                            usuarioSeleccionado = usuario
-                        }, // Se asigna el usuario al tocar
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+        // Pestañas personalizadas (Pill-shaped)
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = Color(0xFFF1F5F9), // Gris claro para el fondo de pestañas
+            modifier = Modifier.fillMaxWidth().height(48.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                tabs.forEachIndexed { index, title ->
+                    val isSelected = tabIndex == index
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(4.dp)
+                            .background(
+                                color = if (isSelected) Color.White else Color.Transparent,
+                                shape = RoundedCornerShape(50)
+                            )
+                            .clickable { tabIndex = index },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            "👤 ${usuario.nombre_completo}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "📧 Correo: ${usuario.correo.ifEmpty { "Sin sincronizar (requiere iniciar sesión)" }}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.DarkGray
-                        )
-                        Text(
-                            "Rol: ${usuario.rol.uppercase()}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            "UID: ${usuario.id}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            text = title,
+                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFF64748B),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -4142,176 +4804,241 @@ fun PantallaGestionUsuarios(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- DIÁLOGO DE CRUD COMPLETO ---
-        if (usuarioSeleccionado != null) {
-            val usuario = usuarioSeleccionado!!
+        // Lista de usuarios (Tarjetas de Figma)
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(usuariosFiltrados) { usuario ->
+                val primeraLetra = usuario.nombre_completo.firstOrNull()?.uppercase() ?: "?"
 
-            AlertDialog(
-                onDismissRequest = { usuarioSeleccionado = null },
-                title = {
-                    Text(
-                        "Perfil de Usuario",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "👤 Nombre: ${usuario.nombre_completo}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            "📧 Correo: ${usuario.correo.ifEmpty { "Sin sincronizar (requiere iniciar sesión)" }}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "🔑 UID: ${usuario.id}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val fechaFormateada = remember(usuario.fecha_registro) {
-                            val sdf = java.text.SimpleDateFormat(
-                                "dd/MM/yyyy hh:mm a",
-                                java.util.Locale.getDefault()
-                            )
-                            sdf.format(java.util.Date(usuario.fecha_registro))
-                        }
-                        Text(
-                            "📅 Registro: $fechaFormateada",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            "Rol actual: ${usuario.rol.uppercase()}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            "Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Botones de Actualización (Update)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .clickable { usuarioSeleccionado = usuario }, // Mantiene tu lógica de abrir el diálogo
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Avatar circular
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF2563EB),
+                            modifier = Modifier.size(48.dp)
                         ) {
-                            // Cambiar Estado
-                            OutlinedButton(
-                                onClick = {
-                                    if (usuario.rol.trim().lowercase() == "administrador") {
-                                        Toast.makeText(
-                                            context,
-                                            "Seguridad: Administradores no editables",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        val nuevoEstado = !usuario.activo
-                                        refUsuarios.child(usuario.id)
-                                            .updateChildren(mapOf("activo" to nuevoEstado))
-                                            .addOnSuccessListener {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Estado actualizado",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                                usuarioSeleccionado =
-                                                    usuarioSeleccionado?.copy(activo = nuevoEstado)
-                                            }
-                                    }
-                                }
-                            ) {
-                                Text(if (usuario.activo) "🔴 Suspender" else "🟢 Activar")
-                            }
-
-                            // Cambiar Rol
-                            OutlinedButton(
-                                onClick = {
-                                    if (usuario.rol.trim().lowercase() == "administrador") {
-                                        Toast.makeText(
-                                            context,
-                                            "Seguridad: No editable",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        val nuevoRol = if (usuario.rol.trim()
-                                                .lowercase() == "pasajero"
-                                        ) "conductor" else "pasajero"
-                                        refUsuarios.child(usuario.id)
-                                            .updateChildren(mapOf("rol" to nuevoRol))
-                                            .addOnSuccessListener {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Rol actualizado",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                                usuarioSeleccionado =
-                                                    usuarioSeleccionado?.copy(rol = nuevoRol)
-                                            }
-                                    }
-                                }
-                            ) {
-                                Text("🔄 Rol")
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(text = primeraLetra, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                             }
                         }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        // Información
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = usuario.nombre_completo, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B))
+                            Text(text = if (usuario.rol == "pasajero") "Pasajero" else "Conductor", fontSize = 12.sp, color = Color(0xFF64748B))
+                            // Correo según tu requerimiento
+                            Text(text = usuario.correo.ifEmpty { "Sin sincronizar" }, fontSize = 10.sp, color = Color(0xFF94A3B8))
+                            Text(text = "UID · ${usuario.id.take(8)}...", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                        }
+
+                        // Badge (Estado)
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (usuario.activo) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                            border = BorderStroke(1.dp, if (usuario.activo) Color(0xFF10B981) else Color(0xFFEF4444))
+                        ) {
+                            Text(
+                                text = if (usuario.activo) "Activo" else "Suspendido",
+                                color = if (usuario.activo) Color(0xFF10B981) else Color(0xFFEF4444),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = { usuarioSeleccionado = null }) {
-                        Text("Cerrar")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Botón Volver (Estilo delineado como en mockup de Paraderos)
+        OutlinedButton(
+            onClick = onVolver,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+        ) {
+            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
+        }
+    }
+
+    // --- DIÁLOGO DE CRUD COMPLETO (Se mantiene tu lógica exacta) ---
+    if (usuarioSeleccionado != null) {
+        val usuario = usuarioSeleccionado!!
+
+        AlertDialog(
+            onDismissRequest = { usuarioSeleccionado = null },
+            title = {
+                Text(
+                    "Perfil de Usuario",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "👤 Nombre: ${usuario.nombre_completo}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        "📧 Correo: ${usuario.correo.ifEmpty { "Sin sincronizar" }}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "🔑 UID: ${usuario.id}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val fechaFormateada = remember(usuario.fecha_registro) {
+                        val sdf = java.text.SimpleDateFormat(
+                            "dd/MM/yyyy hh:mm a",
+                            java.util.Locale.getDefault()
+                        )
+                        sdf.format(java.util.Date(usuario.fecha_registro))
                     }
-                },
-                // Botón de Borrado Fuerte (Hard Delete)
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            if (usuario.rol.trim().lowercase() == "administrador") {
-                                Toast.makeText(
-                                    context,
-                                    "Seguridad: Administradores no se pueden eliminar",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            } else {
-                                refUsuarios.child(usuario.id).removeValue()
-                                    .addOnSuccessListener {
-                                        Toast.makeText(
-                                            context,
-                                            "Usuario eliminado definitivamente",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        usuarioSeleccionado = null
-                                    }.addOnFailureListener {
+                    Text(
+                        "📅 Registro: $fechaFormateada",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        "Rol actual: ${usuario.rol.uppercase()}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Estado: ${if (usuario.activo) "🟢 Activo" else "🔴 Suspendido"}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Botones de Actualización (Update)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Cambiar Estado
+                        OutlinedButton(
+                            onClick = {
+                                if (usuario.rol.trim().lowercase() == "administrador") {
+                                    Toast.makeText(
+                                        context,
+                                        "Seguridad: Administradores no editables",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    val nuevoEstado = !usuario.activo
+                                    refUsuarios.child(usuario.id)
+                                        .updateChildren(mapOf("activo" to nuevoEstado))
+                                        .addOnSuccessListener {
+                                            Toast.makeText(
+                                                context,
+                                                "Estado actualizado",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            usuarioSeleccionado =
+                                                usuarioSeleccionado?.copy(activo = nuevoEstado)
+                                        }
+                                }
+                            }
+                        ) {
+                            Text(if (usuario.activo) "🔴 Suspender" else "🟢 Activar")
+                        }
+
+                        // Cambiar Rol
+                        OutlinedButton(
+                            onClick = {
+                                if (usuario.rol.trim().lowercase() == "administrador") {
+                                    Toast.makeText(
+                                        context,
+                                        "Seguridad: No editable",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    val nuevoRol = if (usuario.rol.trim()
+                                            .lowercase() == "pasajero"
+                                    ) "conductor" else "pasajero"
+                                    refUsuarios.child(usuario.id)
+                                        .updateChildren(mapOf("rol" to nuevoRol))
+                                        .addOnSuccessListener {
+                                            Toast.makeText(
+                                                context,
+                                                "Rol actualizado",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            usuarioSeleccionado =
+                                                usuarioSeleccionado?.copy(rol = nuevoRol)
+                                        }
+                                }
+                            }
+                        ) {
+                            Text("🔄 Rol")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { usuarioSeleccionado = null }) {
+                    Text("Cerrar")
+                }
+            },
+            // Botón de Borrado Fuerte (Hard Delete)
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        if (usuario.rol.trim().lowercase() == "administrador") {
+                            Toast.makeText(
+                                context,
+                                "Seguridad: Administradores no se pueden eliminar",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            refUsuarios.child(usuario.id).removeValue()
+                                .addOnSuccessListener {
+                                    Toast.makeText(
+                                        context,
+                                        "Usuario eliminado definitivamente",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    usuarioSeleccionado = null
+                                }.addOnFailureListener {
                                     Toast.makeText(
                                         context,
                                         "Error al eliminar",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
-                            }
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-                    ) {
-                        Text("🗑️ Borrar Definitivamente")
-                    }
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("🗑️ Borrar Definitivamente")
                 }
-            )
-        }
-
-        Button(
-            onClick = onVolver,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-        ) {
-            Text("Volver al Menú")
-        }
+            }
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionReportes(onVolver: () -> Unit) {
     val context = LocalContext.current
@@ -4348,18 +5075,17 @@ fun PantallaGestionReportes(onVolver: () -> Unit) {
         onDispose { refIncidencias.removeEventListener(listener) }
     }
 
-    // --- FILTRO MATEMÁTICO DE MATRIZ OPERATIVA ---
+    // --- FILTRO MATEMÁTICO DE MATRIZ OPERATIVA (Intacto) ---
     val matrizOperativaYPanicos = listOf("trancón", "desvío", "fallo", "pánico")
 
     val incidenciasFiltradas = listaIncidencias.filter { incidencia ->
         val descripcionNormalizada = incidencia.descripcion.lowercase()
-        // Verificamos si la descripción contiene alguna palabra clave operativa
         val esOperativaOPanico = matrizOperativaYPanicos.any { keyword ->
             descripcionNormalizada.contains(keyword)
         }
 
         if (tabIndex == 0) {
-            // Pestaña Pasajeros: NO es operativa, ni pánico (Sugerencias o quejas manuales)
+            // Pestaña Pasajeros: NO es operativa, ni pánico
             !esOperativaOPanico
         } else {
             // Pestaña Conductores / Operativa: SÍ es operativa o pánico
@@ -4368,20 +5094,105 @@ fun PantallaGestionReportes(onVolver: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC)) // Fondo gris claro
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        Text("Reportes e Incidencias", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // TAB ROW (Pestañas)
-        androidx.compose.material3.TabRow(selectedTabIndex = tabIndex) {
-            tabs.forEachIndexed { index, title ->
-                androidx.compose.material3.Tab(
-                    selected = tabIndex == index,
-                    onClick = { tabIndex = index },
-                    text = { Text(title) }
+        // Cabecera idéntica al mockup
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, shape = CircleShape)
+                    .clickable { onVolver() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color(0xFF1E293B)
                 )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "POPABUS · SOTRACAUCA",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Reportes e Incidencias",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Textos de subtítulo
+        Text(
+            text = "CENTRO DE ATENCIÓN",
+            color = Color(0xFF0D9488),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = "Prioriza novedades de la operación.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // Pestañas personalizadas (Pill-shaped)
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = Color(0xFFF1F5F9), // Gris claro
+            modifier = Modifier.fillMaxWidth().height(48.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                tabs.forEachIndexed { index, title ->
+                    val isSelected = tabIndex == index
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(4.dp)
+                            .background(
+                                color = if (isSelected) Color.White else Color.Transparent,
+                                shape = RoundedCornerShape(50)
+                            )
+                            .clickable { tabIndex = index },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = title,
+                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFF64748B),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
             }
         }
 
@@ -4400,56 +5211,103 @@ fun PantallaGestionReportes(onVolver: () -> Unit) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        // Fondo rojizo suave si es urgente, sino el default
+                            .padding(vertical = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        // Fondo rojizo si es urgente, blanco si es normal
                         colors = CardDefaults.cardColors(
-                            containerColor = if (esUrgente) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = if (esUrgente) Color(0xFFFEF2F2) else Color.White
                         ),
-                        // Borde rojo intenso si es urgente
-                        border = if (esUrgente) androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            Color.Red
-                        ) else null
+                        // Borde rojo suave si es urgente, sino sin borde
+                        border = if (esUrgente) BorderStroke(1.dp, Color(0xFFFECACA)) else null,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            // Título dinámico
-                            Text(
-                                text = if (esUrgente) "🚨 ALERTA: ${incidencia.estado.uppercase()}" else "📋 Reporte Normal",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (esUrgente) Color.Red else MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // Descripción
-                            Text(
-                                text = incidencia.descripcion,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Formateo de fecha
-                            val fechaFormateada = remember(incidencia.fecha_reporte) {
-                                val sdf = java.text.SimpleDateFormat(
-                                    "dd/MM/yyyy hh:mm a",
-                                    java.util.Locale.getDefault()
-                                )
-                                sdf.format(java.util.Date(incidencia.fecha_reporte))
-                            }
-
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // CONTENIDO SUPERIOR
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                verticalAlignment = Alignment.Top,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Row(modifier = Modifier.weight(1f)) {
+                                    // Ícono Circular
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = if (esUrgente) Color(0xFFFEE2E2) else Color(0xFFEFF6FF),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                            // Usamos emojis temporalmente como en tu mockup para simplificar iconos
+                                            Text(if (esUrgente) "⚠️" else "💬", fontSize = 16.sp)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    // Título y Descripción
+                                    Column {
+                                        val titulo = if (esUrgente) "Alerta Crítica: Pánico" else "Reporte Ciudadano"
+                                        Text(
+                                            text = titulo,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = Color(0xFF1E293B)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = incidencia.descripcion,
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF64748B)
+                                        )
+
+                                        // Fecha
+                                        val fechaFormateada = remember(incidencia.fecha_reporte) {
+                                            val sdf = java.text.SimpleDateFormat(
+                                                "dd/MM/yyyy HH:mm",
+                                                java.util.Locale.getDefault()
+                                            )
+                                            sdf.format(java.util.Date(incidencia.fecha_reporte))
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(text = "Hace instantes · $fechaFormateada", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                                    }
+                                }
+
+                                // Badge de Estado
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (esUrgente) Color(0xFFDC2626) else Color(0xFF3B82F6)
+                                ) {
+                                    Text(
+                                        text = if (esUrgente) "URGENTE" else "NUEVO",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(color = if (esUrgente) Color(0xFFFECACA) else Color(0xFFE2E8F0), thickness = 1.dp)
+
+                            // BOTÓN DE ACCIÓN INFERIOR
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { /* Aquí podrías añadir lógica para marcar como resuelto en el futuro */ }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "📅 $fechaFormateada",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.DarkGray
+                                    text = if (esUrgente) "Atender alerta" else "Revisar reporte",
+                                    color = if (esUrgente) Color(0xFFDC2626) else Color(0xFF2563EB),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
                                 )
                                 Text(
-                                    text = "Estado: ${incidencia.estado}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.DarkGray
+                                    text = "→",
+                                    color = if (esUrgente) Color(0xFFDC2626) else Color(0xFF94A3B8),
+                                    fontSize = 14.sp
                                 )
                             }
                         }
@@ -4460,11 +5318,14 @@ fun PantallaGestionReportes(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        // Botón Volver
+        OutlinedButton(
             onClick = onVolver,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
         ) {
-            Text("Volver al Menú")
+            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -4575,6 +5436,7 @@ fun MapaGeneralAdmin(onVolver: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaGestionInformes(onVolver: () -> Unit) {
     val context = LocalContext.current
@@ -4584,6 +5446,7 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
     var listaInformes by remember { mutableStateOf<List<InformeDiario>>(emptyList()) }
     var filtroTiempo by remember { mutableStateOf("Diario") }
 
+    // Descargamos los informes en tiempo real (Lógica Intacta)
     DisposableEffect(Unit) {
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -4605,6 +5468,7 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
         onDispose { refInformes.removeEventListener(listener) }
     }
 
+    // Filtros Matemáticos (Lógica Intacta)
     val currentTime = System.currentTimeMillis()
     val listaFiltrada = remember(listaInformes, filtroTiempo) {
         listaInformes.filter { informe ->
@@ -4625,102 +5489,248 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC)) // Fondo gris claro
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        Text("Gestión de Informes", style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Botones de Filtrado
+        // Cabecera idéntica al mockup
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            listOf("Diario", "Semanal", "Mensual").forEach { filtro ->
-                val seleccionado = filtroTiempo == filtro
-                Button(
-                    onClick = { filtroTiempo = filtro },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (seleccionado) MaterialTheme.colorScheme.primary else Color.LightGray,
-                        contentColor = if (seleccionado) Color.White else Color.Black
-                    )
-                ) {
-                    Text(filtro)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.White, shape = CircleShape)
+                    .clickable { onVolver() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = Color(0xFF1E293B)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "POPABUS · SOTRACAUCA",
+                    color = Color(0xFF0D9488),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Gestión de Informes",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("PP", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(24.dp))
 
+        // Textos de subtítulo
+        Text(
+            text = "ANALÍTICA",
+            color = Color(0xFF0D9488),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = "Consulta el rendimiento operativo.",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // Pestañas personalizadas (Pill-shaped)
+        val tabs = listOf("Diario", "Semanal", "Mensual")
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = Color(0xFFF1F5F9), // Gris claro
+            modifier = Modifier.fillMaxWidth().height(48.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                tabs.forEach { title ->
+                    val isSelected = filtroTiempo == title
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(4.dp)
+                            .background(
+                                color = if (isSelected) Color.White else Color.Transparent,
+                                shape = RoundedCornerShape(50)
+                            )
+                            .clickable { filtroTiempo = title },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = title,
+                            color = if (isSelected) Color(0xFF2563EB) else Color(0xFF64748B),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Tarjeta de Resumen (Analítica General)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Analítica General", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Total Informes", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "$totalInformes",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+            Column(modifier = Modifier.padding(20.dp).fillMaxWidth()) {
+                // Título y logo de la tarjeta
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEFF6FF),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("📊", fontSize = 16.sp)
+                        }
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Tiempo Promedio", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("RESUMEN ACTUAL", color = Color(0xFF0D9488), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("Analítica General", color = Color(0xFF1E293B), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Números grandes
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "$tiempoPromedio min",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
+                            text = "$totalInformes",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF2563EB)
                         )
+                        Text("Total Informes", fontSize = 12.sp, color = Color(0xFF64748B))
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "$tiempoPromedio min",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF2563EB)
+                        )
+                        Text("Tiempo Promedio", fontSize = 12.sp, color = Color(0xFF64748B))
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
+        // Encabezado de la lista con Badge
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Cierres de viaje", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = listaFiltrada.size.toString(), color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // LISTA DE INFORMES
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(listaFiltrada) { informe ->
+                // Generamos un ID corto visual a partir del ID de Firebase para simular el TRP-XXXX
+                val idCortoVisual = if (informe.id_recorrido.length >= 6) {
+                    "TRP-${informe.id_recorrido.takeLast(4).uppercase()}"
+                } else {
+                    "TRP-0000"
+                }
+
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        val fechaFormateada = remember(informe.fecha_cierre) {
-                            val sdf = java.text.SimpleDateFormat(
-                                "dd/MM/yyyy hh:mm a",
-                                java.util.Locale.getDefault()
-                            )
-                            sdf.format(java.util.Date(informe.fecha_cierre))
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            // Check azul en círculo outline
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Transparent,
+                                border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Text("✓", color = Color(0xFF2563EB), fontSize = 16.sp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                Text("CIERRE DE VIAJE", color = Color(0xFF10B981), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(text = idCortoVisual, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
+                            }
                         }
-                        Text(
-                            "📅 Cierre: $fechaFormateada",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "Conductor ID: ${informe.id_conductor}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            "Duración del viaje: ${informe.tiempo_total_minutos} min",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "Alertas emitidas: ${informe.total_alertas_emitidas}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (informe.total_alertas_emitidas > 0) Color.Red else Color.DarkGray
-                        )
+
+                        // Columna derecha con tiempos y alertas
+                        Column(horizontalAlignment = Alignment.End) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("⏱", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${informe.tiempo_total_minutos} min",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF1E293B)
+                                )
+                            }
+                            Text(
+                                text = "${informe.total_alertas_emitidas} alerta(s)",
+                                fontSize = 10.sp,
+                                color = if (informe.total_alertas_emitidas > 0) Color(0xFFEF4444) else Color(0xFF94A3B8),
+                                fontWeight = if (informe.total_alertas_emitidas > 0) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }
@@ -4728,14 +5738,16 @@ fun PantallaGestionInformes(onVolver: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        // Botón Volver
+        OutlinedButton(
             onClick = onVolver,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
         ) {
-            Text("Volver al Menú")
+            Text("<  Volver al Menú", color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)
         }
     }
-
 }
 
 @Composable
