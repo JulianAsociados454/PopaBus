@@ -32,7 +32,12 @@ class ServicioRastreoPasajero : Service() {
     private val flotaBuses = mutableMapOf<String, Location>()
     private val contadoresProximidad = mutableMapOf<String, Int>()
     
+    // Máquina de estados: Variables a nivel de clase
     private var viajeRegistrado = false
+    private var idBusAbordado: String? = null
+    private var horaInicioViaje: Long = 0L
+    private var contadorLejania: Int = 0
+    private var idRegistroActividad: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -75,8 +80,8 @@ class ServicioRastreoPasajero : Service() {
         // 1. Adquirir WakeLock para evitar que el sistema duerma el servicio
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PopaBus::RastreoAbordaje")
-        // Tiempo máximo de seguridad: 30 minutos, luego se libera automáticamente
-        wakeLock?.acquire(30 * 60 * 1000L)
+        // Tiempo máximo de seguridad: 120 minutos, luego se libera automáticamente
+        wakeLock?.acquire(120 * 60 * 1000L)
 
         // 2. Escuchar la posición de todos los buses activos en Firebase
         val refBusesActivos = database.getReference("BusesActivos")
@@ -113,13 +118,64 @@ class ServicioRastreoPasajero : Service() {
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                // Freno de concurrencia: si ya se registró, ignoramos nuevos GPS
-                if (viajeRegistrado) return
-
                 val locPasajero = locationResult.lastLocation ?: return
                 val resultadosDistancia = FloatArray(1)
 
-                // 4. Evaluar la proximidad con la flota de buses
+                // FASE 2: El Descenso y Cálculo Matemático
+                if (viajeRegistrado) {
+                    val idBus = idBusAbordado ?: return
+                    val locBus = flotaBuses[idBus]
+                    
+                    if (locBus == null) {
+                        // El bus se desconectó temporalmente de Firebase. Ignoramos para evitar falsos positivos
+                        return
+                    }
+
+                    Location.distanceBetween(
+                        locPasajero.latitude, locPasajero.longitude,
+                        locBus.latitude, locBus.longitude,
+                        resultadosDistancia
+                    )
+                    
+                    val distancia = resultadosDistancia[0]
+
+                    if (distancia > 100f) { // Margen de seguridad: 100 metros
+                        contadorLejania++
+                        Log.d("RastreoAbordaje", "Pasajero lejos del bus $idBus: $contadorLejania/12 (${distancia}m)")
+
+                        // 12 ciclos * 5 segundos = ~1 minuto continuo lejos del bus
+                        if (contadorLejania >= 12) {
+                            val duracionMinutos = (System.currentTimeMillis() - horaInicioViaje) / 60000
+                            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+                            val idRegistro = idRegistroActividad ?: return
+
+                            Log.d("RastreoAbordaje", "Descenso detectado. Duración: $duracionMinutos min.")
+
+                            val updates = mapOf<String, Any>(
+                                "estado" to "finalizado",
+                                "duracionMinutos" to duracionMinutos
+                            )
+                            
+                            database.getReference("actividad_usuario").child(uid).child(idRegistro)
+                                .updateChildren(updates).addOnCompleteListener {
+                                    Log.d("RastreoAbordaje", "Viaje finalizado guardado en Firebase.")
+                                    // AHORA SÍ: Liberar WakeLock, remover updates y morir.
+                                    detenerYLimpiarServicio()
+                                }
+                            
+                            // Bloqueo para evitar registrar múltiples descensos mientras se guarda
+                            viajeRegistrado = false
+                        }
+                    } else {
+                        // Vuelve a estar a menos de 100m (falsa alarma, túnel, etc.)
+                        contadorLejania = 0
+                    }
+                    
+                    return
+                }
+
+                // FASE 1: Abordaje
+                // Evaluar la proximidad con la flota de buses
                 for ((idBus, locBus) in flotaBuses) {
                     Location.distanceBetween(
                         locPasajero.latitude, locPasajero.longitude,
@@ -138,7 +194,18 @@ class ServicioRastreoPasajero : Service() {
                         if (conteoActual >= 12) {
                             if (!viajeRegistrado) {
                                 viajeRegistrado = true
-                                registrarAbordajeAutomatico(idBus)
+                                idBusAbordado = idBus
+                                horaInicioViaje = System.currentTimeMillis()
+                                
+                                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                if (uid != null) {
+                                    val nuevaActividadRef = database.getReference("actividad_usuario").child(uid).push()
+                                    idRegistroActividad = nuevaActividadRef.key
+                                    
+                                    val latAbordaje = locPasajero.latitude
+                                    val lngAbordaje = locPasajero.longitude
+                                    registrarAbordajeAutomatico(idBus, latAbordaje, lngAbordaje)
+                                }
                             }
                             break // Ignoramos el resto del ciclo para no duplicar buses
                         }
@@ -158,35 +225,63 @@ class ServicioRastreoPasajero : Service() {
         }
     }
 
-    private fun registrarAbordajeAutomatico(idBus: String) {
+    private fun registrarAbordajeAutomatico(idBus: String, latAbordaje: Double, lngAbordaje: Double) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val idRegistro = idRegistroActividad ?: return
 
         // Extraemos la ruta a la que pertenece ese bus de la colección "buses"
-        database.getReference("buses").child(idBus).child("id_ruta").get().addOnSuccessListener { snapshot ->
-            val idRuta = snapshot.getValue(String::class.java) ?: "DESCONOCIDA"
-            val uidPasajero = uid
+        database.getReference("buses").child(idBus).child("id_ruta").get().addOnSuccessListener { snapshotRuta ->
+            val idRuta = snapshotRuta.getValue(String::class.java) ?: "DESCONOCIDA"
 
-            val nuevaActividadRef = database.getReference("actividad_usuario").child(uidPasajero).push()
-            
-            val actividad = ActividadUsuario(
-                id_actividad = nuevaActividadRef.key ?: "",
-                id_bus = idBus,
-                id_ruta = idRuta,
-                fecha_abordaje = System.currentTimeMillis(),
-                metodo_registro = "automatico"
-            )
+            // Buscar paradero más cercano
+            database.getReference("paraderos").get().addOnSuccessListener { snapshotParaderos ->
+                var nombreParaderoCercano = "Paradero desconocido"
+                var distanciaMinima = Float.MAX_VALUE
+                val resultados = FloatArray(1)
 
-            nuevaActividadRef.setValue(actividad).addOnSuccessListener {
-                Log.d("RastreoAbordaje", "Abordaje automático consolidado: $idBus en la ruta $idRuta")
-                detenerYLimpiarServicio()
+                for (hijo in snapshotParaderos.children) {
+                    val nombre = hijo.child("nombre").getValue(String::class.java) ?: continue
+                    val latObj = hijo.child("latitud").value
+                    val lngObj = hijo.child("longitud").value
+
+                    val latParadero = (latObj as? Number)?.toDouble() ?: latObj?.toString()?.toDoubleOrNull() ?: continue
+                    val lngParadero = (lngObj as? Number)?.toDouble() ?: lngObj?.toString()?.toDoubleOrNull() ?: continue
+
+                    Location.distanceBetween(latAbordaje, lngAbordaje, latParadero, lngParadero, resultados)
+                    if (resultados[0] < distanciaMinima) {
+                        distanciaMinima = resultados[0]
+                        nombreParaderoCercano = nombre
+                    }
+                }
+
+                guardarActividadEnCurso(uid, idRegistro, idBus, idRuta, nombreParaderoCercano)
+
             }.addOnFailureListener {
-                Log.e("RastreoAbordaje", "Error guardando abordaje", it)
-                detenerYLimpiarServicio()
+                guardarActividadEnCurso(uid, idRegistro, idBus, idRuta, "Ubicación sin paradero")
             }
         }.addOnFailureListener {
             Log.e("RastreoAbordaje", "Error obteniendo ruta del bus", it)
-            detenerYLimpiarServicio()
+            guardarActividadEnCurso(uid, idRegistro, idBus, "DESCONOCIDA", "Ubicación sin paradero")
         }
+    }
+
+    private fun guardarActividadEnCurso(uid: String, idRegistro: String, idBus: String, idRuta: String, paradero: String) {
+        val actividad = mapOf<String, Any>(
+            "id_actividad" to idRegistro,
+            "id_bus" to idBus,
+            "id_ruta" to idRuta,
+            "fecha_abordaje" to horaInicioViaje,
+            "metodo_registro" to "automatico",
+            "estado" to "en_curso",
+            "paradero_origen" to paradero
+        )
+
+        database.getReference("actividad_usuario").child(uid).child(idRegistro)
+            .updateChildren(actividad).addOnSuccessListener {
+                Log.d("RastreoAbordaje", "Abordaje automático consolidado: $idBus en la ruta $idRuta (Paradero: $paradero)")
+            }.addOnFailureListener {
+                Log.e("RastreoAbordaje", "Error guardando abordaje", it)
+            }
     }
 
     private fun detenerYLimpiarServicio() {
