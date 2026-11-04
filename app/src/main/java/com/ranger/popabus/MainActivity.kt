@@ -945,6 +945,7 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     var transmitiendo by remember { mutableStateOf(false) }
+    var ubicacionMiBus by remember { mutableStateOf<LatLng?>(null) }
     var permisoConcedido by remember { mutableStateOf(false) }
     var enRecorrido by remember { mutableStateOf(false) }
 
@@ -1018,6 +1019,22 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
             delay(5000) // Consulta cada 5 segundos
         }
     }
+    // Escuchar la ubicación propia para dibujar el marcador azul
+    LaunchedEffect(permisoConcedido) {
+        if (permisoConcedido) {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000).build()
+            val callback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    for (location in locationResult.locations) {
+                        ubicacionMiBus = LatLng(location.latitude, location.longitude)
+                    }
+                }
+            }
+            try {
+                fusedLocationClient.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
+            } catch (e: SecurityException) { }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         GoogleMap(
@@ -1030,13 +1047,21 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                     MarcadorBusAnimado(idBus, destino, iconoBus, "Compañero")
                 }
             }
+            if (ubicacionMiBus != null)  {
+                Marker(
+                    state = MarkerState(position = ubicacionMiBus!!),
+                    title = "Mi Bus (Tú)",
+                    snippet = "Estás aquí",
+                    icon = iconoBus
+                )
+            }
+
             incidenciasActivas.forEach { incidencia ->
                 Marker(
                     state = MarkerState(position = LatLng(incidencia.latitud, incidencia.longitud)),
                     title = "⚠️ Alerta Reportada",
                     snippet = incidencia.descripcion,
-                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
-                )
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
             }
         }
 
