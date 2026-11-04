@@ -711,6 +711,21 @@ fun Application.configureRouting() {
             }
             call.respond(lista)
         }
+        // --- NUEVO: ELIMINAR UBICACIÓN CUANDO TERMINA EL VIAJE ---
+        delete("/api/ubicacion/{id_bus}") {
+            val idBus = call.parameters["id_bus"] ?: ""
+
+            val eliminado = transaction {
+                Ubicaciones.deleteWhere { Ubicaciones.idBus eq idBus }
+            }
+
+            if (eliminado > 0) {
+                println("🗑️ Bus eliminado del mapa: $idBus")
+                call.respond(mapOf("status" to "ok", "mensaje" to "Ubicación eliminada"))
+            } else {
+                call.respond(HttpStatusCode.NotFound, mapOf("status" to "error"))
+            }
+        }
     }
 
 }

@@ -127,6 +127,8 @@ import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.fillMaxHeight
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
     val latitud: Double = 0.0,
@@ -701,6 +703,8 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
 
                             if (respuesta.isSuccessful && respuesta.body()?.status == "ok") {
                                 val datos = respuesta.body()!!
+                                val prefs = context.getSharedPreferences("PopaBusPrefs", android.content.Context.MODE_PRIVATE)
+                                prefs.edit().putString("correo_usuario", datos.nombre_completo).apply()
                                 Toast.makeText(context, "Bienvenido ${datos.nombre_completo}", Toast.LENGTH_SHORT).show()
                                 onLoginExitoso(datos.rol)
                             } else {
@@ -1198,6 +1202,12 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var permisoConcedido by remember { mutableStateOf(false) }
 
+    // Leemos el correo que se guardó en el Login
+    val prefs = context.getSharedPreferences("PopaBusPrefs", android.content.Context.MODE_PRIVATE)
+    val correoGuardado = prefs.getString("correo_usuario", "") ?: ""
+
+    var mostrarDialogoIncidencia by remember { mutableStateOf(false) }
+
     // --- ESTADOS DEL MAPA Y DATOS ---
     var busesEnZona by remember { mutableStateOf<Map<String, LatLng>>(emptyMap()) }
     var rutasOficiales by remember { mutableStateOf<List<com.ranger.popabus.network.RutaRespuesta>>(emptyList()) }
@@ -1207,15 +1217,14 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     var ubicacionPasajero by remember { mutableStateOf<LatLng?>(null) }
     var rutaSeleccionada by remember { mutableStateOf<com.ranger.popabus.network.RutaRespuesta?>(null) }
     var mostrarRutas by remember { mutableStateOf(true) }
-    val auth = remember { FirebaseAuth.getInstance() }
 
-    // --- ESTADOS DE LA UI (Menú y SOS) ---
+    // --- ESTADOS DE LA UI ---
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
     var rastreandoAbordaje by remember { mutableStateOf(false) }
     var mostrarDialogoPanico by remember { mutableStateOf(false) }
 
-    // --- NUEVOS ESTADOS PARA EL BUSCADOR INTELIGENTE ---
+    // --- ESTADOS DEL BUSCADOR Y PARADERO SELECCIONADO (HU11) ---
     var textoBusqueda by remember { mutableStateOf("") }
     var menuSugerenciasExpandido by remember { mutableStateOf(false) }
     var paraderoSeleccionadoBusqueda by remember { mutableStateOf<com.ranger.popabus.network.ParaderoRespuesta?>(null) }
@@ -1249,25 +1258,26 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    // --- MOTOR DE DATOS (Buses, Rutas, Paraderos desde Render) ---
+    // --- MOTOR DE DATOS ---
     LaunchedEffect(Unit) {
         while (true) {
             try {
-                // Buses
                 val respBuses = com.ranger.popabus.network.RetrofitClient.apiService.obtenerBusesActivos()
                 if (respBuses.isSuccessful && respBuses.body()?.status == "ok") {
                     val mapa = mutableMapOf<String, LatLng>()
-                    for (bus in respBuses.body()!!.buses) mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
+                    for (bus in respBuses.body()!!.buses) {
+                        // FILTRO CLAVE: Ignorar buses fantasma con coordenadas 0.0
+                        if (bus.latitud != 0.0 && bus.longitud != 0.0) {
+                            mapa[bus.id_bus] = LatLng(bus.latitud, bus.longitud)
+                        }
+                    }
                     busesEnZona = mapa
                 }
-                // Rutas
                 val respRutas = com.ranger.popabus.network.RetrofitClient.apiService.listarRutas()
                 if (respRutas.isSuccessful) rutasOficiales = respRutas.body() ?: emptyList()
 
-                // Paraderos
                 val respParaderos = com.ranger.popabus.network.RetrofitClient.apiService.listarParaderos()
                 if (respParaderos.isSuccessful) paraderosOficiales = respParaderos.body() ?: emptyList()
-
             } catch (e: Exception) {
                 Log.e("MapaBackend", "Error: ${e.message}")
             }
@@ -1275,7 +1285,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     }
 
-    // --- LÓGICA DEL BUSCADOR INTELIGENTE ---
+    // --- LÓGICA DEL BUSCADOR (HU09) ---
     val sugerenciasParaderos = if (textoBusqueda.isNotBlank()) {
         paraderosOficiales.filter { it.nombre.contains(textoBusqueda, ignoreCase = true) }.take(4)
     } else emptyList()
@@ -1306,19 +1316,42 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet {
-                Text("Ayuda", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
-                Spacer(modifier = Modifier.height(8.dp))
-                NavigationDrawerItem(label = { Text("Sugerencias") }, selected = false, onClick = { vistaAyudaActual = "SUGERENCIAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                NavigationDrawerItem(label = { Text("Actividad (Historial)") }, icon = { Text("⏱️") }, selected = false, onClick = { vistaAyudaActual = "ACTIVIDAD"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                NavigationDrawerItem(
-                    label = { Text("Historial de Búsquedas") },
-                    icon = { Text("🔍") },
-                    selected = false,
-                    onClick = { vistaAyudaActual = "HISTORIAL_BUSQUEDAS"; coroutineScope.launch { drawerState.close() } },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
+                // Column con fillMaxHeight para empujar el texto al fondo
+                Column(modifier = Modifier.fillMaxHeight().padding(16.dp)) {
+                    Text("Ayuda", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    NavigationDrawerItem(label = { Text("Sugerencias") }, selected = false, onClick = { vistaAyudaActual = "SUGERENCIAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    NavigationDrawerItem(label = { Text("Actividad (Historial)") }, icon = { Text("⏱️") }, selected = false, onClick = { vistaAyudaActual = "ACTIVIDAD"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    NavigationDrawerItem(label = { Text("Historial de Búsquedas") }, icon = { Text("🔍") }, selected = false, onClick = { vistaAyudaActual = "HISTORIAL_BUSQUEDAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+
+                    // HU14: Validación del Reporte
+                    NavigationDrawerItem(
+                        label = { Text("⚠️ Reportar Incidencia") },
+                        selected = false,
+                        onClick = {
+                            if (correoGuardado.isEmpty()) {
+                                Toast.makeText(context, "Debes iniciar sesión para reportar", Toast.LENGTH_LONG).show()
+                                onCerrarSesion() // Redirige al Login
+                            } else {
+                                mostrarDialogoIncidencia = true
+                                coroutineScope.launch { drawerState.close() }
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f)) // EMPUJA HACIA ABAJO
+                    HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+                    Text(
+                        text = "Sesión: ${if (correoGuardado.isEmpty()) "Invitado" else correoGuardado}",
+                        modifier = Modifier.padding(top = 16.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
             }
         }
     ) {
@@ -1375,14 +1408,27 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         }
                     }
 
+                    // --- HU11: CÁLCULO DEL ETA ---
                     busesEnZona.forEach { (idBus, destino) ->
                         key(idBus) {
-                            MarcadorBusAnimado(idBus, destino, iconoBus, "Calculando...")
+                            // Solo calcular si no es un bus fantasma
+                            if (destino.latitude != 0.0 && destino.longitude != 0.0) {
+                                val eta = if (paraderoSeleccionadoBusqueda != null) {
+                                    val distancia = calcularDistanciaMetros(LatLng(paraderoSeleccionadoBusqueda!!.latitud, paraderoSeleccionadoBusqueda!!.longitud), destino)
+                                    obtenerTextoETA(distancia)
+                                } else if (ubicacionPasajero != null) {
+                                    val distancia = calcularDistanciaMetros(ubicacionPasajero!!, destino)
+                                    obtenerTextoETA(distancia)
+                                } else {
+                                    "Calculando..."
+                                }
+                                MarcadorBusAnimado(idBus, destino, iconoBus, eta)
+                            }
                         }
                     }
                 }
 
-                // 2. BUSCADOR INTELIGENTE
+                // 2. BUSCADOR INTELIGENTE (HU09)
                 if (rutaSeleccionada == null) {
                     Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.92f).zIndex(2f), horizontalAlignment = Alignment.CenterHorizontally) {
                         OutlinedTextField(
@@ -1397,7 +1443,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                                         if (textoBusqueda.isNotBlank()) {
                                             coroutineScope.launch {
                                                 try {
-                                                    val uid = auth.currentUser?.uid ?: "anonimo"
+                                                    val uid = "anonimo" // O tu auth
                                                     com.ranger.popabus.network.RetrofitClient.apiService.crearHistorialBusqueda(
                                                         com.ranger.popabus.network.HistorialBusquedaRespuesta(
                                                             id_usuario = uid,
@@ -1481,7 +1527,6 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = if (rastreandoAbordaje) MaterialTheme.colorScheme.primary else Color.DarkGray)
                     ) { Text(if (rastreandoAbordaje) "⏹️ Detener" else "✅ Abordaje") }
 
-                    // Ventana del SOS
                     if (mostrarDialogoPanico) {
                         AlertDialog(
                             onDismissRequest = { mostrarDialogoPanico = false },
@@ -1531,7 +1576,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
                 ) { Text("Salir") }
 
-                // 5. INYECCIÓN DE LAS VISTAS DE AYUDA
+                // 5. VISTAS DE AYUDA
                 if (vistaAyudaActual == "ACERCA") {
                     VistaAcercaDe(onDismiss = { vistaAyudaActual = null })
                 } else if (vistaAyudaActual == "PREGUNTAS") {
@@ -1540,52 +1585,30 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     VistaSugerencias(onDismiss = { vistaAyudaActual = null })
                 } else if (vistaAyudaActual == "ACTIVIDAD") {
                     var listaActividades by remember { mutableStateOf<List<com.ranger.popabus.network.ActividadRespuesta>>(emptyList()) }
-
                     LaunchedEffect(Unit) {
                         try {
-                            val uid = auth.currentUser?.uid ?: "anonimo"
-                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerActividades(uid)
-                            if (respuesta.isSuccessful) {
-                                listaActividades = respuesta.body() ?: emptyList()
-                            }
-                        } catch (e: Exception) {
-                            Log.e("Historial", "Error al leer historial de Render: ${e.message}")
-                        }
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerActividades("anonimo")
+                            if (respuesta.isSuccessful) listaActividades = respuesta.body() ?: emptyList()
+                        } catch (e: Exception) {}
                     }
-
                     val actividadesAdaptadas = listaActividades.map {
-                        ActividadUsuario(
-                            id_actividad = it.id,
-                            id_bus = it.id_bus,
-                            id_ruta = it.id_ruta,
-                            fecha_abordaje = it.fecha_abordaje,
-                            metodo_registro = it.metodo_registro
-                        )
+                        ActividadUsuario(it.id, it.id_bus, it.id_ruta, it.fecha_abordaje, it.metodo_registro)
                     }
-
-                    VistaActividad(
-                        listaActividades = actividadesAdaptadas,
-                        hayInternet = true,
-                        onDismiss = { vistaAyudaActual = null }
-                    )
+                    VistaActividad(listaActividades = actividadesAdaptadas, hayInternet = true, onDismiss = { vistaAyudaActual = null })
                 } else if (vistaAyudaActual == "HISTORIAL_BUSQUEDAS") {
                     var listaBusquedas by remember { mutableStateOf<List<com.ranger.popabus.network.HistorialBusquedaRespuesta>>(emptyList()) }
-
                     LaunchedEffect(Unit) {
                         try {
-                            val uid = auth.currentUser?.uid ?: "anonimo"
-                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerHistorialBusquedas(uid)
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerHistorialBusquedas("anonimo")
                             if (respuesta.isSuccessful) listaBusquedas = respuesta.body() ?: emptyList()
                         } catch (e: Exception) {}
                     }
-
                     AlertDialog(
                         onDismissRequest = { vistaAyudaActual = null },
                         title = { Text("Tus últimas búsquedas") },
                         text = {
-                            if (listaBusquedas.isEmpty()) {
-                                Text("Aún no has buscado destinos.")
-                            } else {
+                            if (listaBusquedas.isEmpty()) { Text("Aún no has buscado destinos.") }
+                            else {
                                 LazyColumn {
                                     items(listaBusquedas) { busqueda ->
                                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -1599,10 +1622,35 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                                 }
                             }
                         },
-                        confirmButton = {
-                            TextButton(onClick = { vistaAyudaActual = null }) {
-                                Text("Cerrar")
+                        confirmButton = { TextButton(onClick = { vistaAyudaActual = null }) { Text("Cerrar") } }
+                    )
+                }
+
+                // --- MOSTRAR EL DIÁLOGO DE INCIDENCIA ---
+                if (mostrarDialogoIncidencia) {
+                    DialogoReportarIncidencia(
+                        onDismiss = { mostrarDialogoIncidencia = false },
+                        onEnviar = { descripcion ->
+                            coroutineScope.launch {
+                                try {
+                                    val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearIncidencia(
+                                        com.ranger.popabus.network.IncidenciaRespuesta(
+                                            id_usuario = "anonimo",
+                                            descripcion = descripcion,
+                                            estado = "pendiente",
+                                            fecha_reporte = System.currentTimeMillis(),
+                                            latitud = ubicacionPasajero?.latitude ?: popayan.latitude,
+                                            longitud = ubicacionPasajero?.longitude ?: popayan.longitude
+                                        )
+                                    )
+                                    if (respuesta.isSuccessful) {
+                                        Toast.makeText(context, "Reporte enviado con éxito", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
+                                }
                             }
+                            mostrarDialogoIncidencia = false
                         }
                     )
                 }
@@ -1610,7 +1658,6 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
         }
     }
 }
-
 
 @Composable
 fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
