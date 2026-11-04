@@ -1378,7 +1378,21 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
                     NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
                     NavigationDrawerItem(label = { Text("Actividad (Historial)") }, icon = { Text("⏱️") }, selected = false, onClick = { vistaAyudaActual = "ACTIVIDAD"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                    NavigationDrawerItem(label = { Text("Historial de Búsquedas") }, icon = { Text("🔍") }, selected = false, onClick = { vistaAyudaActual = "HISTORIAL_BUSQUEDAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    NavigationDrawerItem(label = { Text("Historial de Búsquedas") },
+                        selected = false,
+                        onClick = {
+                            if (correoGuardado.isEmpty()) {
+                                Toast.makeText(context, "Debes iniciar sesión para reportar", Toast.LENGTH_LONG).show()
+                                onCerrarSesion() // Redirige al Login
+                            } else {
+                                vistaAyudaActual = "HISTORIAL_BUSQUEDAS"
+                                coroutineScope.launch { drawerState.close() }
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+
+
+                    )
 
                     // HU14: Validación del Reporte
                     NavigationDrawerItem(
