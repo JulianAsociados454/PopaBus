@@ -1,6 +1,8 @@
 package com.ranger.popabus
 import android.Manifest
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.layout.heightIn
@@ -482,6 +484,10 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.d("FirebaseOffline", "La memoria local ya estaba encendida")
         }
+        getSharedPreferences("PopaBusPrefs", MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
 
 
 
@@ -502,6 +508,24 @@ class MainActivity : ComponentActivity() {
                     // 3. Volver al login
                     pantallaActual = "LOGIN"
                 }
+                val activity = this@MainActivity
+                DisposableEffect(Unit) {
+                    onDispose {
+                        if (activity.isFinishing && !activity.isChangingConfigurations) {
+                            try {
+                                getSharedPreferences("PopaBusPrefs", MODE_PRIVATE)
+                                    .edit()
+                                    .clear()
+                                    .apply()
+                                try { FirebaseAuth.getInstance().signOut() } catch (_: Exception) {}
+                                Log.d("LimpiarSesion", "Sesión borrada al cerrar la app")
+                            } catch (e: Exception) {
+                                Log.e("LimpiarSesion", "Error al limpiar preferencias: ${e.message}")
+                            }
+                        }
+                    }
+                }
+
                 when (pantallaActual) {
                     "LOGIN" -> PantallaLogin(
                         onIrARegistro = { pantallaActual = "REGISTRO" },
@@ -774,7 +798,6 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var rolSeleccionado by remember { mutableStateOf("pasajero") }
-    var expandido by remember { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
 
     // Colores del Mockup
@@ -863,29 +886,6 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                // --- MENÚ DESPLEGABLE DE ROL (Mantenido de tu código) ---
-                Text("Tipo de Usuario", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                ExposedDropdownMenuBox(expanded = expandido, onExpandedChange = { expandido = !expandido }) {
-                    OutlinedTextField(
-                        value = rolSeleccionado.replaceFirstChar { it.uppercase() },
-                        onValueChange = {}, readOnly = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg, unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue)
-                    )
-                    ExposedDropdownMenu(expanded = expandido, onDismissRequest = { expandido = false }) {
-                        listOf("pasajero", "conductor").forEach { rol ->
-                            DropdownMenuItem(
-                                text = { Text(rol.replaceFirstChar { it.uppercase() }) },
-                                onClick = { rolSeleccionado = rol; expandido = false }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
 
                 // Botón Registrarse (Conectado a Render)
                 Button(
