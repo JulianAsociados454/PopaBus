@@ -489,16 +489,28 @@ class MainActivity : ComponentActivity() {
             PopaBusTheme {
                 // EVOLUCIÓN: Ahora controlamos pantallas completas, no solo roles
                 var pantallaActual by rememberSaveable { mutableStateOf("LOGIN") }
+                val cerrarSesionCompleta: () -> Unit = {
+                    // 1. Borrar TODAS las preferencias (correo, rol, etc.)
+                    getSharedPreferences("PopaBusPrefs", MODE_PRIVATE)
+                        .edit()
+                        .clear()
+                        .apply()
 
+                    // 2. Intentar cerrar Firebase (por si a futuro lo usas)
+                    try { FirebaseAuth.getInstance().signOut() } catch (_: Exception) {}
+
+                    // 3. Volver al login
+                    pantallaActual = "LOGIN"
+                }
                 when (pantallaActual) {
                     "LOGIN" -> PantallaLogin(
                         onIrARegistro = { pantallaActual = "REGISTRO" },
                         onLoginExitoso = { rolRecibido ->
-                            val rolNormalizado = rolRecibido.trim().lowercase()
-                            when (rolNormalizado) {
-                                "conductor" -> pantallaActual = "CONDUCTOR"
-                                "administrador" -> pantallaActual = "ADMINISTRADOR"
-                                else -> pantallaActual = "PASAJERO"
+                            val rol = rolRecibido.trim().lowercase()
+                            pantallaActual = when (rol) {
+                                "conductor"     -> "CONDUCTOR"
+                                "administrador" -> "ADMINISTRADOR"
+                                else            -> "PASAJERO"
                             }
                         }
                     )
@@ -533,23 +545,14 @@ class MainActivity : ComponentActivity() {
                         onPasajeroSeleccionado = { pantallaActual = "PASAJERO" }
                     )
                     "PASAJERO" -> MapaPopabus(
-                        onCerrarSesion = {
-                            FirebaseAuth.getInstance().signOut()
-                            pantallaActual = "LOGIN"
-                        }
+                        onCerrarSesion = cerrarSesionCompleta
                     )
                     "CONDUCTOR" -> PantallaConductor(
-                        onCerrarSesion = {
-                            FirebaseAuth.getInstance().signOut()
-                            pantallaActual = "LOGIN"
-                        }
+                        onCerrarSesion = cerrarSesionCompleta
                     )
 
                     "ADMINISTRADOR" -> PantallaAdministrador(
-                        onCerrarSesion = {
-                            FirebaseAuth.getInstance().signOut()
-                            pantallaActual = "LOGIN"
-                        }
+                        onCerrarSesion = cerrarSesionCompleta
                     )
 
 
