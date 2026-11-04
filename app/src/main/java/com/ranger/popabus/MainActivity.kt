@@ -939,6 +939,7 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
 @SuppressLint("MissingPermission")
 @Composable
 fun PantallaConductor(onCerrarSesion: () -> Unit) {
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -1087,11 +1088,24 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                 } else {
                     Button(
                         onClick = {
-                            enRecorrido = false
-                            transmitiendo = false
-                            idRecorridoActual = null
-                            context.stopService(Intent(context, ServicioGpsConductor::class.java))
-                            Toast.makeText(context, "Viaje Finalizado", Toast.LENGTH_SHORT).show()
+                            coroutineScope.launch {
+                                try {
+                                    // 1. Borrar la ubicación del bus en Render
+                                    com.ranger.popabus.network.RetrofitClient.apiService.eliminarUbicacion("bus_test_001")
+
+                                    // 2. Detener el servicio GPS
+                                    context.stopService(Intent(context, ServicioGpsConductor::class.java))
+
+                                    // 3. Actualizar la UI
+                                    enRecorrido = false
+                                    transmitiendo = false
+                                    idRecorridoActual = null
+                                    Toast.makeText(context, "Viaje Finalizado. Bus oculto del mapa.", Toast.LENGTH_SHORT).show()
+
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error al finalizar: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         modifier = Modifier.fillMaxWidth()
@@ -1179,9 +1193,20 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 
                 Button(
                     onClick = {
-                        transmitiendo = false
-                        context.stopService(Intent(context, ServicioGpsConductor::class.java))
-                        onCerrarSesion()
+                        coroutineScope.launch {
+                            try {
+                                // 1. Borrar la ubicación del bus en Render
+                                com.ranger.popabus.network.RetrofitClient.apiService.eliminarUbicacion("bus_test_001")
+
+                                // 2. Detener el servicio GPS
+                                context.stopService(Intent(context, ServicioGpsConductor::class.java))
+
+                                // 3. Cerrar sesión
+                                onCerrarSesion()
+                            } catch (e: Exception) {
+                                onCerrarSesion() // Si falla la red, al menos lo sacamos
+                            }
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                     modifier = Modifier.fillMaxWidth()

@@ -200,4 +200,6 @@ interface ApiService {
 
     @GET("/api/historial-busquedas/{uid}")
     suspend fun obtenerHistorialBusquedas(@Path("uid") uid: String): Response<List<HistorialBusquedaRespuesta>>
+    @DELETE("/api/ubicacion/{id_bus}")
+    suspend fun eliminarUbicacion(@Path("id_bus") idBus: String): Response<Map<String, String>>
 }
