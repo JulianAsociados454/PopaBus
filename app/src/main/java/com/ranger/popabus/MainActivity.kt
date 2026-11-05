@@ -1,5 +1,6 @@
 package com.ranger.popabus
 
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -9,47 +10,118 @@ import android.graphics.Canvas
 import android.location.Location
 import android.os.Bundle
 import android.os.Looper
+import android.os.Vibrator
+import android.os.VibrationEffect
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Help
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.GppGood
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -61,6 +133,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +142,6 @@ import androidx.core.content.ContextCompat
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
-import androidx.media3.common.Timeline
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
@@ -90,7 +162,12 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
-import com.google.maps.android.compose.*
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerComposable
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.ranger.popabus.ui.theme.PopaBusTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,21 +175,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.outlined.GppGood
-
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.ui.draw.shadow
-import androidx.compose.material.icons.outlined.Security
-
+import androidx.compose.foundation.layout.wrapContentWidth
 
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
@@ -419,14 +482,19 @@ fun calcularDistanciaMetros(origen: LatLng, destino: LatLng): Float {
 
 // NUEVA FUNCIÓN LÓGICA (SPRINT 9): Convierte la distancia en un texto predictivo de ETA
 fun obtenerTextoETA(distanciaMetros: Float): String {
-    // Asumimos velocidad urbana en Popayán: ~15 km/h (250 metros por minuto)
+    // Velocidad urbana promedio en Popayán: ~15 km/h (250 metros por minuto)
     val velocidadMetrosPorMinuto = 250f
-    val minutos = (distanciaMetros / velocidadMetrosPorMinuto).toInt()
+    val minutosTotales = (distanciaMetros / velocidadMetrosPorMinuto).toInt()
 
     return when {
-        distanciaMetros < 50 -> "¡Llegando!"
-        minutos < 1 -> "< 1 min"
-        else -> "~$minutos min"
+        distanciaMetros < 50f -> "¡Llegando!"
+        minutosTotales < 1 -> "< 1 min"
+        minutosTotales < 60 -> "~$minutosTotales min"
+        else -> {
+            val horas = minutosTotales / 60
+            val minutosRestantes = minutosTotales % 60
+            if (minutosRestantes == 0) "~${horas} h" else "~${horas} h ${minutosRestantes} min"
+        }
     }
 }
 
@@ -461,11 +529,33 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PopaBusTheme {
-// Evolución: El estado inicial ahora es el Splash[cite: 4]
                 var pantallaActual by rememberSaveable { mutableStateOf("SPLASH") }
 
                 when (pantallaActual) {
-                    "SPLASH" -> PantallaSplash(onSplashTerminado = { pantallaActual = "LOGIN" })
+                    "SPLASH" -> PantallaSplash(
+                        onSplashTerminado = {
+                            val currentUser = FirebaseAuth.getInstance().currentUser
+                            if (currentUser != null) {
+                                FirebaseDatabase.getInstance().getReference("usuarios")
+                                    .child(currentUser.uid)
+                                    .child("rol")
+                                    .get()
+                                    .addOnSuccessListener { snapshot ->
+                                        val rolLeido = snapshot.getValue(String::class.java)
+                                        pantallaActual = when (RolUsuario.desdeString(rolLeido)) {
+                                            RolUsuario.CONDUCTOR -> "CONDUCTOR"
+                                            RolUsuario.ADMINISTRADOR -> "ADMINISTRADOR"
+                                            RolUsuario.PASAJERO -> "PASAJERO"
+                                        }
+                                    }
+                                    .addOnFailureListener {
+                                        pantallaActual = "LOGIN" // Fallback seguro
+                                    }
+                            } else {
+                                pantallaActual = "LOGIN"
+                            }
+                        }
+                    )
                     "LOGIN" -> PantallaLogin(
                         onIrARegistro = { pantallaActual = "REGISTRO" },
                         onLoginExitoso = { rolRecibido ->
@@ -1696,6 +1786,17 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     var pestañaActual by remember { mutableStateOf("INICIO") }
     // Memoria para saber qué ruta tocó el usuario
     var idRutaSeleccionada by remember { mutableStateOf<String?>(null) }
+    
+    // [INICIO BLOQUE - ESTADO ALERTA PROXIMIDAD]
+    var alertaEmitida by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(idRutaSeleccionada) {
+        if (idRutaSeleccionada == null) {
+            alertaEmitida = false
+        }
+    }
+    // [FIN BLOQUE - ESTADO ALERTA PROXIMIDAD]
+    
     // ESTADO PARA LA VISTA ACTUAL DE AYUDA (Sugerencias, Acerca De, Preguntas)
     var vistaAyudaActual by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -2080,14 +2181,13 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 if (mostrandoPlanificador) {
                     PantallaPlanificaViaje(
                         ubicacionPasajero = ubicacionPasajero,
-                        rutasProcesadas = rutasProcesadas,
-                        paraderosProcesados = paraderosProcesados,
+                        rutasProcesadas = rutasOficiales,
+                        paraderosProcesados = paraderosOficiales,
                         busesEnZona = busesEnZona,
-                        inventarioBuses = inventarioBuses,
                         onVolver = { mostrandoPlanificador = false },
                         onRutaSeleccionada = { idRuta ->
-                            idRutaSeleccionada = idRuta
-                            mostrandoPlanificador = false
+                            idRutaSeleccionada = idRuta            // 1. Dispara el modo aislamiento en el mapa
+                            mostrandoPlanificador = false          // 2. Apaga el planificador para volver a la vista del mapa
                         }
                     )
                 } else {
@@ -2112,9 +2212,11 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     cameraPositionState = cameraPositionState,
                     properties = mapProperties,
-                    uiSettings = MapUiSettings(zoomControlsEnabled = false)
-
-
+                    // AGREGA ESTA LÍNEA EXACTA AQUÍ:
+                    uiSettings = com.google.maps.android.compose.MapUiSettings(
+                        myLocationButtonEnabled = false,
+                        zoomControlsEnabled = false
+                    )
                 ) {
 // --- NUEVO SPRINT: RENDERIZADO INTELIGENTE DE RUTAS ---
                     if (idRutaSeleccionada != null) {
@@ -2173,13 +2275,20 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     }
 
                     busesEnZona.forEach { (idBus, destino) ->
-                        key(idBus) {
-                            MarcadorBusAnimado(
-                                idBus = idBus,
-                                destinoLatLng = destino,
-                                icono = iconoBus,
-                                textoEta = "En camino"
-                            )
+                        val busOficial = inventarioBuses.find { it.id == idBus }
+                        val rutaDelBus = busOficial?.id_ruta
+
+                        val mostrarEsteBus = idRutaSeleccionada == null || idRutaSeleccionada == rutaDelBus
+
+                        if (mostrarEsteBus) {
+                            key(idBus) {
+                                MarcadorBusAnimado(
+                                    idBus = idBus,
+                                    destinoLatLng = destino,
+                                    icono = iconoBus,
+                                    textoEta = "En camino"
+                                )
+                            }
                         }
                     }
                 }
@@ -2379,69 +2488,72 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                             }
                         }
 
-                        // Bottom Card Flotante
-                        Card(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 32.dp, start = 16.dp, end = 16.dp)
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Ruta: ${rutaSeleccionadaObj.nombre_ruta}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                    color = Color(0xFF1E293B)
-                                )
-                                Text(
-                                    text = "${rutaSeleccionadaObj.origen} - ${rutaSeleccionadaObj.destino}",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
+                        // Esta Card reemplaza a la tarjeta flotante anterior (PASO 2 y 3 consolidados)
+// --- INICIO DE LA NUEVA TARJETA ESTÁTICA ---
 
-                                val busesDeEstaRuta =
-                                    inventarioBuses.filter { it.id_ruta == idRutaSeleccionada }
-                                        .map { it.id }
-                                val ubicacionesBusesEstaRuta =
-                                    busesEnZona.filterKeys { it in busesDeEstaRuta }.values
-                                val etaTexto = if (ubicacionPasajero != null && ubicacionesBusesEstaRuta.isNotEmpty()) {
-                                    val distancias =
-                                        ubicacionesBusesEstaRuta.map { calcularDistanciaMetros(ubicacionPasajero!!, it) }
-                                    val distanciaMin = distancias.minOrNull() ?: 0f
-                                    obtenerTextoETA(distanciaMin)
-                                } else {
-                                    "Calculando..."
+                        // 1. Cálculos en tiempo real desde Firebase
+                        val cantidadParadas = paraderosOficiales.count { paradero ->
+                            paradero.id_ruta == idRutaSeleccionada && paradero.estado == "activo"
+                        }
+
+                        // Filtramos de TODOS los buses activos (busesEnZona) SOLO los que pertenecen a la ruta aislada
+                        val busesDeRutaAislada = inventarioBuses.filter { it.id_ruta == idRutaSeleccionada }.map { it.id }
+                        // Extraemos las coordenadas precisas de esos buses, descartando cualquier bus que no esté en la lista anterior
+                        val ubicacionesBusesAislados = busesEnZona.filterKeys { it in busesDeRutaAislada }.values
+
+                        val etaAislada = when {
+                            ubicacionPasajero == null -> "Ubicando..."
+                            ubicacionesBusesAislados.isEmpty() -> "Sin buses"
+                            else -> {
+                                val distanciaMinima = ubicacionesBusesAislados.minOf { ubicacionBus ->
+                                    calcularDistanciaMetros(ubicacionPasajero!!, ubicacionBus)
                                 }
+                                obtenerTextoETA(distanciaMinima)
+                            }
+                        }
 
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "Próximo bus en: ",
-                                        color = Color(0xFF1E293B),
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = etaTexto,
-                                        color = Color(0xFF2563EB),
-                                        fontWeight = FontWeight.Bold
-                                    )
+                        // [INICIO BLOQUE INYECTADO - GATILLO ALERTA PROXIMIDAD]
+                        val sharedPrefs = context.getSharedPreferences("PreferenciasPopabus", Context.MODE_PRIVATE)
+                        val alertasActivas = sharedPrefs.getBoolean("alertasProximidad", true)
+
+                        LaunchedEffect(ubicacionesBusesAislados, ubicacionPasajero, alertasActivas) {
+                            if (alertasActivas && ubicacionPasajero != null && ubicacionesBusesAislados.isNotEmpty()) {
+                                // Calculamos en base a la fórmula requerida de forma local (sin afectar tu lógica de interfaz)
+                                val distanciaMin = ubicacionesBusesAislados.minOf { 
+                                    calcularDistanciaMetros(ubicacionPasajero!!, it) 
                                 }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = { idRutaSeleccionada = null },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(50.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                                ) {
-                                    Text("Ver mapa completo", color = Color.White)
+                                val etaMinutos = (distanciaMin / 250f).toInt()
+                                
+                                if (etaMinutos <= 3 && !alertaEmitida) {
+                                    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        vibrator.vibrate(VibrationEffect.createOneShot(5000, VibrationEffect.DEFAULT_AMPLITUDE))
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        vibrator.vibrate(5000)
+                                    }
+                                    alertaEmitida = true // Candado one-shot
                                 }
                             }
                         }
+                        // [FIN BLOQUE INYECTADO]
+
+                        // 2. Contenedor anclado al fondo
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            TarjetaRutaAisladaFija(
+                                nombreRuta = rutaSeleccionadaObj.nombre_ruta,
+                                origenDestino = "${rutaSeleccionadaObj.origen} → ${rutaSeleccionadaObj.destino}",
+                                hayBusesActivos = ubicacionesBusesAislados.isNotEmpty(),
+                                cantidadParadas = cantidadParadas,
+                                etaActual = etaAislada,
+                                onVerRutaCompleta = { idRutaSeleccionada = null }
+                            )
+                        }
+                        // --- FIN DE LA NUEVA TARJETA ESTÁTICA ---
                     }
                 }
 
@@ -2711,6 +2823,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                     PantallaCuentaPasajero(
                         onCerrarSesion = onCerrarSesion,
+                        onVolverAlInicio = { pestañaActual = "INICIO" },
                         onOpcionSeleccionada = { opcion ->
                             when (opcion) {
                                 "Acerca de PopaBus" -> vistaAyudaActual = "ACERCA"
@@ -2924,69 +3037,86 @@ fun VistaActividad(
                             colors = CardDefaults.cardColors(containerColor = Color.White),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
+                            val fechaFormateada = remember(actividad.fecha_abordaje) {
+                                val sdf = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
+                                sdf.format(Date(actividad.fecha_abordaje))
+                            }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                verticalAlignment = Alignment.Top
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Izquierda (Ícono)
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(Color(0xFFEFF6FF), RoundedCornerShape(12.dp)),
-                                    contentAlignment = Alignment.Center
+                                // 1. Bloque Izquierdo (50%)
+                                Row(
+                                    modifier = Modifier.weight(0.70f),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Timeline,
-                                        contentDescription = "Viaje",
-                                        tint = Color(0xFF2563EB)
-                                    )
-                                }
-
-                                // Centro (Textos Compactos)
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Text(
-                                        text = " ${actividad.paradero_origen }",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1E293B)
-                                    )
-                                    Text(
-                                        text = "Trayecto de ${actividad.duracionMinutos} min",
-                                        fontSize = 13.sp,
-                                        color = Color(0xFF64748B)
-                                    )
-
-                                    val fechaFormateada = remember(actividad.fecha_abordaje) {
-                                        val sdf = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
-                                        sdf.format(Date(actividad.fecha_abordaje))
+                                    // Ícono
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .background(Color(0xFFEFF6FF), RoundedCornerShape(12.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Timeline,
+                                            contentDescription = "Viaje",
+                                            tint = Color(0xFF2563EB)
+                                        )
                                     }
 
-                                    Text(
-                                        text = fechaFormateada,
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF94A3B8) // Gris claro
-                                    )
+                                    // Textos (Destino, Trayecto, Fecha)
+                                    Column(
+                                        modifier = Modifier.padding(start = 12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Text(
+                                            text = actividad.paradero_origen.trim(),
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF1E293B)
+                                        )
+                                        Text(
+                                            text = "Trayecto de ${actividad.duracionMinutos} min",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF64748B)
+                                        )
+                                        Text(
+                                            text = fechaFormateada,
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                    }
                                 }
 
-                                // Derecha (Píldora de Ruta)
+                                // 2. Espaciador (25%)
+                                Spacer(modifier = Modifier.weight(0.25f))
+
+                                // 3. Bloque Derecho (25%) - Píldora de Ruta
                                 Surface(
+                                    modifier = Modifier
+                                        .weight(0.30f) // CAMBIO 2: Toma el 30% restante
+                                        .align(Alignment.Top) // CAMBIO 3: Lo empuja a la parte superior de la tarjeta
+                                        .wrapContentWidth(Alignment.End), // CAMBIO 4: Pega la píldora al borde derecho
                                     shape = RoundedCornerShape(50),
                                     color = Color(0xFFE6FFFA)
                                 ) {
-                                    Text(
-                                        text = "Ruta ${actividad.id_ruta}",
-                                        color = Color(0xFF0D9488),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "${actividad.id_ruta}",
+                                            color = Color(0xFF0D9488),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -3034,67 +3164,128 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
             // SOLO mostramos la barra si NO estamos en el Menú principal
             if (subPantalla != "MENU") {
                 NavigationBar(
-                    modifier = Modifier.height(70.dp),
                     containerColor = Color.White,
-                    tonalElevation = 0.dp
+                    tonalElevation = 4.dp
                 ) {
-                    // Atajo 1: Inicio
                     NavigationBarItem(
-                        icon = { Icon(Icons.Outlined.Home, contentDescription = "Inicio") },
+                        icon = {
+                            Box(contentAlignment = Alignment.TopCenter) {
+                                // La línea azul condicional
+                                if (subPantalla == "MENU") {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
+                                            .width(32.dp)
+                                            .height(3.dp)
+                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
+                                    )
+                                }
+                                // El ícono estático debajo
+                                Icon(Icons.Outlined.Home, contentDescription = "Inicio")
+                            }
+                        },
                         label = { Text("Inicio", fontSize = 10.sp) },
                         selected = subPantalla == "MENU",
                         onClick = { subPantalla = "MENU" },
+
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF3B82F6),
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            selectedTextColor = Color(0xFF3B82F6),
-                            unselectedTextColor = Color(0xFF94A3B8),
-                            indicatorColor = Color(0xFFEFF6FF)
+                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray
                         )
                     )
 
+
                     // Atajo 2: Reportes
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.Inbox, contentDescription = "Reportes") },
+                        icon = {
+                            Box(contentAlignment = Alignment.TopCenter) {
+                                // La línea azul condicional
+                                if (subPantalla == "REPORTES") {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
+                                            .width(32.dp)
+                                            .height(3.dp)
+                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
+                                    )
+                                }
+                                // El ícono estático debajo
+                                Icon(Icons.Default.Inbox, contentDescription = "Reportes")
+                            }
+                        },
                         label = { Text("Reportes", fontSize = 10.sp) },
                         selected = subPantalla == "REPORTES",
                         onClick = { subPantalla = "REPORTES" },
+
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF3B82F6),
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            selectedTextColor = Color(0xFF3B82F6),
-                            unselectedTextColor = Color(0xFF94A3B8),
-                            indicatorColor = Color(0xFFEFF6FF)
+                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray
                         )
                     )
 
                     // Atajo 3: Mapa (Torre de Control)
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.LocationOn, contentDescription = "Mapa") },
+
+                        icon = {
+                            Box(contentAlignment = Alignment.TopCenter) {
+                                // La línea azul condicional
+                                if (subPantalla == "TORRE_CONTROL") {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
+                                            .width(32.dp)
+                                            .height(3.dp)
+                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
+                                    )
+                                }
+                                // El ícono estático debajo
+                                Icon(Icons.Default.LocationOn, contentDescription = "Mapa")
+                            }
+                        },
                         label = { Text("Mapa", fontSize = 10.sp) },
                         selected = subPantalla == "TORRE_CONTROL",
                         onClick = { subPantalla = "TORRE_CONTROL" },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF3B82F6),
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            selectedTextColor = Color(0xFF3B82F6),
-                            unselectedTextColor = Color(0xFF94A3B8),
-                            indicatorColor = Color(0xFFEFF6FF)
+                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray
                         )
                     )
-
                     // Atajo 4: Informes
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.BarChart, contentDescription = "Informes") },
+                        icon = {
+                            Box(contentAlignment = Alignment.TopCenter) {
+                                // La línea azul condicional
+                                if (subPantalla == "INFORMES") {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
+                                            .width(32.dp)
+                                            .height(3.dp)
+                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
+                                    )
+                                }
+                                // El ícono estático debajo
+                                Icon(Icons.Default.BarChart, contentDescription = "Informes")
+                            }
+                        },
                         label = { Text("Informes", fontSize = 10.sp) },
                         selected = subPantalla == "INFORMES",
                         onClick = { subPantalla = "INFORMES" },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF3B82F6),
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            selectedTextColor = Color(0xFF3B82F6),
-                            unselectedTextColor = Color(0xFF94A3B8),
-                            indicatorColor = Color(0xFFEFF6FF)
+                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
+                            selectedIconColor = Color(0xFF2563EB),
+                            unselectedIconColor = Color.Gray,
+                            selectedTextColor = Color(0xFF2563EB),
+                            unselectedTextColor = Color.Gray
                         )
                     )
                 }
@@ -6459,105 +6650,186 @@ fun PantallaPlanificaViaje(
     ubicacionPasajero: LatLng?,
     rutasProcesadas: List<RutaOficial>,
     paraderosProcesados: List<ParaderoOficial>,
-    busesEnZona: Map<String, LatLng>,
-    inventarioBuses: List<BusOficial>,
+    busesEnZona: Map<String, LatLng>, // Para el ETA
     onVolver: () -> Unit,
     onRutaSeleccionada: (String) -> Unit
 ) {
-    var textoBusqueda by remember { mutableStateOf("") }
+    var textoDestino by remember { mutableStateOf("") }
+    // Relaciona ID del Bus -> ID de su Ruta leyendo la colección "buses"
+    val rutasPorBus = remember { mutableStateOf(emptyMap<String, String>()) }
+
+    DisposableEffect(Unit) {
+        val refBuses = com.google.firebase.database.FirebaseDatabase.getInstance().getReference("buses")
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val mapaTemp = mutableMapOf<String, String>()
+                for (busSnap in snapshot.children) {
+                    val idBus = busSnap.key ?: continue
+                    val idRuta = busSnap.child("id_ruta").value?.toString()
+                        ?: busSnap.child("ruta").value?.toString()
+                        ?: ""
+                    if (idRuta.isNotEmpty()) {
+                        mapaTemp[idBus] = idRuta
+                    }
+                }
+                rutasPorBus.value = mapaTemp
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
+        }
+        refBuses.addValueEventListener(listener)
+        onDispose { refBuses.removeEventListener(listener) }
+    }
+
+    // Buscador Inteligente: Filtramos paraderos y luego sacamos sus rutas
+    val rutasSugeridas = remember(textoDestino, rutasProcesadas, paraderosProcesados) {
+        if (textoDestino.isBlank()) {
+            rutasProcesadas.filter { it.estado == "activa" } // Muestra todas si no hay texto
+        } else {
+            val paraderosCoincidentes = paraderosProcesados.filter {
+                it.nombre.contains(textoDestino, ignoreCase = true) ||
+                        it.direccion.contains(textoDestino, ignoreCase = true)
+            }
+            val idsRutas = paraderosCoincidentes.map { it.id_ruta }.toSet()
+            rutasProcesadas.filter { it.id in idsRutas && it.estado == "activa" }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC))
     ) {
-        // Header
+        // CABECERA
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onVolver) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+            Surface(
+                onClick = onVolver,
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                shadowElevation = 2.dp,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Volver",
+                    modifier = Modifier.padding(12.dp),
+                    tint = Color(0xFF0F172A)
+                )
             }
-            Text("Planifica tu viaje", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+
+            Text(
+                text = "Planifica tu viaje",
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
+            )
+
+            Spacer(modifier = Modifier.size(48.dp))
         }
 
-        // Origin / Destination Card
+        // TARJETA DE ORIGEN/DESTINO
         Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Origen", fontSize = 12.sp, color = Color.Gray)
-                Text("Mi ubicación actual", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF2563EB))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFFE2E8F0))
-                Text("Destino", fontSize = 12.sp, color = Color.Gray)
-                OutlinedTextField(
-                    value = textoBusqueda,
-                    onValueChange = { textoBusqueda = it },
-                    placeholder = { Text("Ej: Campanario") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedContainerColor = Color.Transparent
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Guía Visual Izquierda
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(end = 16.dp)
+                ) {
+                    Box(modifier = Modifier.size(10.dp).border(2.dp, Color(0xFF2563EB), CircleShape))
+                    Box(modifier = Modifier.width(2.dp).height(45.dp).background(Color(0xFFE2E8F0)))
+                    Box(modifier = Modifier.size(10.dp).border(2.dp, Color(0xFF10B981), RoundedCornerShape(2.dp)))
+                }
+
+                // Campos
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Origen", fontSize = 11.sp, color = Color.Gray)
+                    Text("Mi ubicación actual", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF1F5F9))
+
+                    Text("Destino", fontSize = 11.sp, color = Color.Gray)
+                    BasicTextField(
+                        value = textoDestino,
+                        onValueChange = { textoDestino = it },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, color = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        decorationBox = { innerTextField ->
+                            if (textoDestino.isEmpty()) {
+                                Text("Busca un lugar o dirección", color = Color.LightGray, fontSize = 16.sp)
+                            }
+                            innerTextField()
+                        }
                     )
-                )
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.padding(start = 8.dp).size(36.dp)
+                ) {
+                    Icon(Icons.Default.SwapVert, contentDescription = "Invertir", tint = Color(0xFF2563EB), modifier = Modifier.padding(6.dp))
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Results
-        val rutasSugeridas = if (textoBusqueda.isNotBlank()) {
-            val paraderosMatch = paraderosProcesados.filter { 
-                it.nombre.contains(textoBusqueda, ignoreCase = true) || it.direccion.contains(textoBusqueda, ignoreCase = true) 
-            }
-            val idsRutas = paraderosMatch.map { it.id_ruta }.distinct()
-            rutasProcesadas.filter { it.id in idsRutas || it.nombre_ruta.contains(textoBusqueda, ignoreCase = true) || it.destino.contains(textoBusqueda, ignoreCase = true) }
-        } else emptyList()
-        
-        if (textoBusqueda.isNotBlank()) {
-            Text("Rutas sugeridas", modifier = Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold, color = Color.Gray)
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            LazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                items(rutasSugeridas) { ruta ->
-                    // Calculate ETA
-                    val busesDeEstaRuta = inventarioBuses.filter { it.id_ruta == ruta.id }.map { it.id }
-                    val ubicacionesBusesEstaRuta = busesEnZona.filterKeys { it in busesDeEstaRuta }.values
-                    val etaTexto = if (ubicacionPasajero != null && ubicacionesBusesEstaRuta.isNotEmpty()) {
-                        val distancias = ubicacionesBusesEstaRuta.map { calcularDistanciaMetros(ubicacionPasajero, it) }
-                        val distanciaMin = distancias.minOrNull() ?: 0f
-                        obtenerTextoETA(distanciaMin)
-                    } else {
-                        "Calculando..."
-                    }
+        Text(
+            text = "RUTAS SUGERIDAS",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF94A3B8)
+        )
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onRutaSeleccionada(ruta.id) },
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(ruta.nombre_ruta, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B))
-                                Text("Hacia: ${ruta.destino}", fontSize = 14.sp, color = Color.Gray)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Próximo en:", fontSize = 10.sp, color = Color.Gray)
-                                Text(etaTexto, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF2563EB))
-                            }
+// LISTA DINÁMICA DE RUTAS
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(rutasSugeridas) { ruta ->
+                val numeroVisual = ruta.nombre_ruta.filter { it.isDigit() }.takeIf { it.isNotEmpty() } ?: "R"
+
+// 2. Filtro estricto cruzado con rutasPorBus local
+                val idRutaActual = ruta.id
+                val idsBusesDeEstaRuta = rutasPorBus.value.filterValues { it == idRutaActual }.keys
+                val ubicacionesBusesDeEstaRuta = busesEnZona.filterKeys { it in idsBusesDeEstaRuta }.values
+
+                val etaReal = when {
+                    ubicacionPasajero == null -> "Ubicando..."
+                    ubicacionesBusesDeEstaRuta.isEmpty() -> "Sin buses"
+                    else -> {
+                        val distanciaMinima = ubicacionesBusesDeEstaRuta.minOf { ubicacionBus ->
+                            calcularDistanciaMetros(ubicacionPasajero!!, ubicacionBus)
                         }
+                        obtenerTextoETA(distanciaMinima)
                     }
                 }
+
+                TarjetaRutaSugerida(
+                    numeroRuta = numeroVisual,
+                    nombreRuta = ruta.nombre_ruta,
+                    paraderos = "${ruta.origen} - ${ruta.destino}",
+                    tipoViaje = "Ruta directa",
+                    eta = etaReal,
+                    onClick = { onRutaSeleccionada(ruta.id) }
+                )
             }
         }
     }
@@ -6566,6 +6838,7 @@ fun PantallaPlanificaViaje(
 @Composable
 fun PantallaCuentaPasajero(
     onCerrarSesion: () -> Unit,
+    onVolverAlInicio: () -> Unit,
     onOpcionSeleccionada: (String) -> Unit
 ) {
     // NUEVO: Estado para saber qué mostrar (MENU o NOTIFICACIONES)
@@ -6594,7 +6867,7 @@ fun PantallaCuentaPasajero(
             // TopBar simple
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 IconButton(
-                    onClick = { /* por ahora no hace nada */ },
+                    onClick = onVolverAlInicio,
                     modifier = Modifier.align(Alignment.CenterStart)
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
@@ -6634,9 +6907,7 @@ fun PantallaCuentaPasajero(
             val opciones = listOf(
                 "Notificaciones" to Icons.Default.Notifications,
                 "Ayuda" to Icons.Default.Help,
-                "Preguntas Frecuentes" to Icons.Default.Info,
                 "Sugerencias" to Icons.Default.Lightbulb,
-                "Reportar" to Icons.Default.Warning,
                 "Acerca de PopaBus" to Icons.Default.Info
             )
 
@@ -6697,8 +6968,11 @@ fun PantallaCuentaPasajero(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaNotificaciones(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val sharedPrefs = remember { context.getSharedPreferences("PreferenciasPopabus", Context.MODE_PRIVATE) }
+
     // Estados independientes para cada interruptor
-    var alertasProximidad by remember { mutableStateOf(true) }
+    var alertasProximidad by remember { mutableStateOf(sharedPrefs.getBoolean("alertasProximidad", true)) }
     var promociones by remember { mutableStateOf(false) }
     var avisos by remember { mutableStateOf(true) }
 
@@ -6738,7 +7012,10 @@ fun PantallaNotificaciones(onVolver: () -> Unit) {
                         titulo = "Alertas de proximidad",
                         subtitulo = "Te avisamos cuando tu bus esté cerca.",
                         checked = alertasProximidad,
-                        onCheckedChange = { alertasProximidad = it }
+                        onCheckedChange = { 
+                            alertasProximidad = it 
+                            sharedPrefs.edit().putBoolean("alertasProximidad", it).apply()
+                        }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
 
@@ -7095,6 +7372,7 @@ fun FilaAcercaDe(icono: androidx.compose.ui.graphics.vector.ImageVector, titulo:
 fun PantallaAyudaYFrecuentes(titulo: String, onVolver: () -> Unit) {
     var faq1Expandido by remember { mutableStateOf(false) }
     var faq2Expandido by remember { mutableStateOf(false) }
+    var faq3Expandido by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -7111,7 +7389,10 @@ fun PantallaAyudaYFrecuentes(titulo: String, onVolver: () -> Unit) {
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
         )
 
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState())
+        ) {
             // Cabecera superior
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -7158,16 +7439,31 @@ fun PantallaAyudaYFrecuentes(titulo: String, onVolver: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
 
                     // Pregunta 2
-                    Row(modifier = Modifier.fillMaxWidth().clickable {}.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("¿Puedo usar PopaBus sin una cuenta?", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color(0xFF64748B))
+                    Column(modifier = Modifier.clickable { faq2Expandido = !faq2Expandido }.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("¿Puedo usar PopaBus sin una cuenta?", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
+                            Icon(if (faq2Expandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color(0xFF64748B))
+                        }
+                        if (faq2Expandido) {
+                            Text(
+                                "Si. Puedes consultar rutas y buses cercanos sin registrarte.",
+                                fontSize = 13.sp, color = Color(0xFF64748B), modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
                     }
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
-
-                    // Pregunta 3
-                    Row(modifier = Modifier.fillMaxWidth().clickable {}.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("¿Cómo reporto un objeto perdido?", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color(0xFF64748B))
+                        // Pregunta 3
+                    Column(modifier = Modifier.clickable { faq3Expandido = !faq3Expandido }.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("¿Cómo reporto un objeto perdido?", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
+                            Icon(if (faq3Expandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color(0xFF64748B))
+                        }
+                        if (faq3Expandido) {
+                            Text(
+                                "Contacta a soporte e indica la ruta, hora y descripción del objeto.",
+                                fontSize = 13.sp, color = Color(0xFF64748B), modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -7185,6 +7481,211 @@ fun PantallaAyudaYFrecuentes(titulo: String, onVolver: () -> Unit) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Contactar a Soporte", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF2563EB))
             }
+        }
+    }
+}
+
+// Lógica para asignar un color dinámico según el número o nombre de la ruta
+fun obtenerColorRuta(numeroRuta: String): androidx.compose.ui.graphics.Color {
+    return when {
+        numeroRuta.contains("7") -> androidx.compose.ui.graphics.Color(0xFF2563EB) // Azul
+        numeroRuta.contains("2") -> androidx.compose.ui.graphics.Color(0xFF10B981) // Verde
+        numeroRuta.contains("4") -> androidx.compose.ui.graphics.Color(0xFF8B5CF6) // Morado
+        numeroRuta.contains("1") -> androidx.compose.ui.graphics.Color(0xFFF59E0B) // Naranja
+        else -> androidx.compose.ui.graphics.Color(0xFF64748B) // Gris por defecto
+    }
+}
+
+// Componente visual para cada tarjeta de ruta sugerida
+@Composable
+fun TarjetaRutaSugerida(
+    numeroRuta: String,
+    nombreRuta: String,
+    paraderos: String,
+    tipoViaje: String,
+    eta: String,
+    onClick: () -> Unit
+) {
+    val colorFondo = obtenerColorRuta(numeroRuta)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Cuadro de color grande con el número
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(colorFondo, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = numeroRuta,
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Textos centrales
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = nombreRuta, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                Text(text = paraderos, fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = tipoViaje, fontSize = 12.sp, color = Color.Gray)
+            }
+
+            // ETA (Tiempo estimado) a la derecha
+            Column(horizontalAlignment = Alignment.End) {
+                Text(text = eta, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+                Text(text = "Próximo bus", fontSize = 11.sp, color = Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+fun TarjetaRutaAisladaFija(
+    nombreRuta: String,
+    origenDestino: String,
+    hayBusesActivos: Boolean,
+    cantidadParadas: Int,
+    tiempoRecorridoTotal: String = "22 min", // Puedes hacerlo dinámico después
+    etaActual: String = "5 min", // Aquí va tu cálculo matemático real
+    onVerRutaCompleta: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            // Indicador estético superior (la pequeña línea gris)
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(Color(0xFFE2E8F0), CircleShape)
+                    .align(Alignment.CenterHorizontally)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // FILA 1: Título y Píldora de Estado
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Título de la ruta (limitado al 50% del ancho)
+                Text(
+                    text = "Ruta $nombreRuta",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 24.sp,
+                    color = Color(0xFF0F172A), // Casi negro
+                    modifier = Modifier.weight(1f) // Ocupa el espacio disponible
+                )
+
+                // Píldora Dinámica (En camino / No disponible) - Asegurada con el texto
+                Surface(
+                    shape = CircleShape,
+                    color = if (hayBusesActivos) Color(0xFFE8F5E9) else Color(0xFFF1F5F9),
+                    modifier = Modifier.padding(start = 8.dp) // Pequeño margen a la izquierda
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(if (hayBusesActivos) Color(0xFF10B981) else Color(0xFF94A3B8), CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (hayBusesActivos) "En camino" else "No disponible",
+                            color = if (hayBusesActivos) Color(0xFF059669) else Color(0xFF64748B),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Subtítulo de Origen y Destino (limitado al 50% del ancho)
+            Text(
+                text = origenDestino,
+                color = Color(0xFF64748B),
+                fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth(0.5f) // Limita el ancho al 50%
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // FILA 2: ETA en una sola línea
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(text = "Próximo bus en ", fontSize = 20.sp, color = Color.Black, fontWeight = FontWeight.Medium)
+                Text(text = etaActual, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // FILA 3: Íconos y estadísticas (Reloj y Paraderos)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Reloj
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = tiempoRecorridoTotal, fontSize = 14.sp, color = Color(0xFF64748B))
+
+                Spacer(modifier = Modifier.width(24.dp))
+
+                // Paraderos
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "$cantidadParadas paradas", fontSize = 14.sp, color = Color(0xFF64748B))
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // FILA 4: Botón Azul de ancho completo
+            Button(
+                onClick = onVerRutaCompleta,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+            ) {
+                Text("Ver ruta completa", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
