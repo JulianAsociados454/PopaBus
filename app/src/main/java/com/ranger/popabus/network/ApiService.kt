@@ -92,6 +92,13 @@ data class ParaderoRespuesta(
     val estado: String = "activo",
     val id_ruta: String = ""
 )
+data class CrearParaderoRequest(
+    val nombre: String,
+    val direccion: String,
+    val latitud: Double,
+    val longitud: Double,
+    val estado: String = "activo"
+)
 data class UsuarioRespuesta(
     val uid: String,
     val correo: String,
@@ -162,9 +169,6 @@ interface ApiService {
     @GET("/api/paraderos")
     suspend fun listarParaderos(): Response<List<ParaderoRespuesta>>
 
-    @POST("/api/paraderos")
-    suspend fun crearParadero(@Body paradero: ParaderoRespuesta): Response<Map<String, String>>
-
     @DELETE("/api/paraderos/{id}")
     suspend fun eliminarParadero(@Path("id") id: String): Response<Map<String, String>>
     @GET("/api/usuarios")
@@ -201,5 +205,8 @@ interface ApiService {
     @GET("/api/historial-busquedas/{uid}")
     suspend fun obtenerHistorialBusquedas(@Path("uid") uid: String): Response<List<HistorialBusquedaRespuesta>>
     @DELETE("/api/ubicacion/{id_bus}")
+
     suspend fun eliminarUbicacion(@Path("id_bus") idBus: String): Response<Map<String, String>>
+    @POST("/api/paraderos")
+    suspend fun crearParadero(@Body request: CrearParaderoRequest): Response<Map<String, String>>
 }

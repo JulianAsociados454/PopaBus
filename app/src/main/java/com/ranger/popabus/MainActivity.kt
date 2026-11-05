@@ -1796,8 +1796,10 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
         "TORRE_CONTROL" -> MapaGeneralAdmin(onVolver = { subPantalla = "MENU" })
     }
 }
+
 @Composable
 fun PantallaGestionParaderos(onVolver: () -> Unit) {
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -1851,13 +1853,15 @@ fun PantallaGestionParaderos(onVolver: () -> Unit) {
                     scope.launch {
                         try {
                             val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.crearParadero(
-                                com.ranger.popabus.network.ParaderoRespuesta(
+                                com.ranger.popabus.network.CrearParaderoRequest(
                                     nombre = nombre,
                                     direccion = direccion,
                                     latitud = lat,
-                                    longitud = lng
+                                    longitud = lng,
+                                    estado = "activo"
                                 )
                             )
+
                             if (respuesta.isSuccessful) {
                                 Toast.makeText(context, "Paradero Guardado", Toast.LENGTH_SHORT).show()
                                 nombre = ""
