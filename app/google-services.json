@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "519575230065-2eaipaok957nu1olruuqjhkgceh81i3j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ranger.popabus",
+            "certificate_hash": "de347c280b85030503b82950ff459c96a58021ac"
+          }
+        },
+        {
           "client_id": "519575230065-enba9r2vnfadfet57r1krnfklaojehgu.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

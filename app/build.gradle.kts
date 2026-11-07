@@ -14,6 +14,15 @@ if (localPropertiesFile.exists()) {
 }
 
 android {
+    signingConfigs {
+        create("release") {
+            storePassword = "llave_popabus_v3"
+            keyAlias = "key2"
+            keyPassword = "nueva_alianza"
+            storeFile =
+                file("/home/julian/android-studio-quail3-linux/android-studio/bin/prueba_release_dos")
+        }
+    }
     namespace = "com.ranger.popabus"
     compileSdk {
         version = release(37)
@@ -32,9 +41,11 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            // Esta línea obliga a Android Studio a usar la llave que configuramos arriba
+            signingConfig = signingConfigs.getByName("release")
+
+            // Mantenemos tu regla de optimización apagada para que Firebase no falle
+            isMinifyEnabled = false
         }
     }
     compileOptions {

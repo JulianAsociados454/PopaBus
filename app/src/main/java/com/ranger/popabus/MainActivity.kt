@@ -12,6 +12,9 @@ import android.os.Bundle
 import android.os.Looper
 import android.os.Vibrator
 import android.os.VibrationEffect
+import android.os.VibratorManager
+import android.os.VibrationAttributes
+import android.media.AudioAttributes
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -176,6 +179,18 @@ import java.util.Date
 import java.util.Locale
 
 import androidx.compose.foundation.layout.wrapContentWidth
+
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle
+
+
+
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+
+
 
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
@@ -594,7 +609,9 @@ class MainActivity : ComponentActivity() {
                         onCerrarSesion = {
                             FirebaseAuth.getInstance().signOut()
                             pantallaActual = "LOGIN"
-                        }
+                        },
+                        onIrALogin = { pantallaActual = "LOGIN" },
+                        onIrARegistro = { pantallaActual = "REGISTRO" }
                     )
                     "CONDUCTOR" -> PantallaConductor(
                         onCerrarSesion = {
@@ -653,11 +670,11 @@ fun PantallaLogin(onIrARegistro: () -> Unit, onLoginExitoso: (String) -> Unit) {
             }
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = buildAnnotatedString {
-                    withStyle(style = SpanStyle(color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
                         append("Popa")
                     }
-                    withStyle(style = SpanStyle(color = Color(0xFF0D9488), fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 28.sp)) { // <--- Cambiado a Azul
                         append("Bus")
                     }
                 }
@@ -875,187 +892,238 @@ fun PantallaRegistro(onVolverLogin: () -> Unit, onRegistroExitoso: (String, Stri
     var nombre by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
+    var confirmContrasena by remember { mutableStateOf("") }
+
+    // Estados para el ojito
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
 
-    // Colores del Mockup
+    // Lógica de Validación en Tiempo Real
+    val tieneMinimo8 = contrasena.length >= 8
+    val tieneMayuscula = contrasena.any { it.isUpperCase() }
+    val tieneNumero = contrasena.any { it.isDigit() }
+    val tieneEspecial = contrasena.any { !it.isLetterOrDigit() }
+
+    // El botón solo se habilita si se cumplen las reglas y las claves coinciden
+    val contrasenaSegura = tieneMinimo8 && tieneMayuscula && tieneNumero && tieneEspecial
+    val contraseñasCoinciden = contrasena.isNotEmpty() && contrasena == confirmContrasena
+    val formularioValido = nombre.isNotEmpty() && correo.isNotEmpty() && contrasenaSegura && contraseñasCoinciden
+
+    // Colores base para la UI
     val primaryBlue = Color(0xFF2563EB)
     val darkText = Color(0xFF1E293B)
     val grayText = Color(0xFF64748B)
-    val tealBg = Color(0xFF14B8A6)
-    val lightGrayBg = Color(0xFFF8FAFC)
-    val cardBg = Color.White
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(lightGrayBg)
+            .background(Color.White)
+            .verticalScroll(rememberScrollState()) // <--- ESTA ES LA LÍNEA MÁGICA
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Cabecera con botón de retroceso y Título
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.White, shape = RoundedCornerShape(12.dp))
-                    .clickable { onVolverLogin() },
-                contentAlignment = Alignment.Center
+        Spacer(modifier = Modifier.height(16.dp))
+
+// 1. Logo y Título PopaBus (Ajuste de Color)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF2563EB),
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
-                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = darkText
+                    imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus,
+                    contentDescription = "Logo",
+                    tint = Color.White,
+                    modifier = Modifier.padding(8.dp)
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
-            Text("Crear Cuenta", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = darkText))
-            Spacer(modifier = Modifier.weight(1.3f))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold, fontSize = 28.sp)) {
+                        append("Popa")
+                    }
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 28.sp)) { // <--- Cambiado a Azul
+                        append("Bus")
+                    }
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // 2. Icono Teal de Usuario
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .background(tealBg, shape = RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = androidx.compose.material.icons.Icons.Filled.Person,
-                contentDescription = "Usuario",
-                tint = Color.White,
-                modifier = Modifier.size(32.dp)
+        Text("Crear Cuenta", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = darkText)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Completa tus datos para empezar a moverte mejor.", fontSize = 12.sp, color = grayText)
+
+        Spacer(modifier = Modifier.height(25.dp))
+
+
+
+
+        // Campo: Nombre
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("Nombre completo", fontWeight = FontWeight.Bold, color = darkText, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = nombre,
+                onValueChange = { nombre = it },
+                placeholder = { Text("Tu nombre y apellido", color = Color.LightGray) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 3. Textos
-        Text("Empieza a moverte mejor", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = darkText))
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Crea tu cuenta para guardar rutas y recibir alertas personalizadas.",
-            textAlign = TextAlign.Center,
-            color = grayText,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        // Campo: Correo
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("Correo electrónico", fontWeight = FontWeight.Bold, color = darkText, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = correo,
+                onValueChange = { correo = it },
+                placeholder = { Text("nombre@correo.com", color = Color.LightGray) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 4. Tarjeta del Formulario
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                // Campo: Nombre
-                Text("Nombre completo", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = nombre,
-                    onValueChange = { nombre = it },
-                    placeholder = { Text("Tu nombre y apellido", color = Color.LightGray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg,
-                        unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Campo: Correo
-                Text("Correo", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = correo,
-                    onValueChange = { correo = it },
-                    placeholder = { Text("tu@correo.com", color = Color.LightGray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg,
-                        unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Campo: Contraseña
-                Text("Contraseña", fontWeight = FontWeight.Bold, color = darkText, style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = contrasena,
-                    onValueChange = { contrasena = it },
-                    placeholder = { Text("Mínimo 8 caracteres", color = Color.LightGray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = lightGrayBg, focusedContainerColor = lightGrayBg,
-                        unfocusedBorderColor = Color.Transparent, focusedBorderColor = primaryBlue
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Botón Registrarse (Lógica Original Intacta)
-                Button(
-                    onClick = {
-                        if (correo.isNotEmpty() && contrasena.isNotEmpty() && nombre.isNotEmpty()) {
-                            cargando = true
-                            auth.createUserWithEmailAndPassword(correo, contrasena)
-                                .addOnCompleteListener { task ->
-                                    if (task.isSuccessful) {
-                                        val user = auth.currentUser
-                                        Toast.makeText(context, "¡Usuario creado exitosamente!", Toast.LENGTH_SHORT).show()
-                                        onRegistroExitoso(user?.uid ?: "", nombre)
-                                    } else {
-                                        cargando = false
-                                        Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                        } else {
-                            Toast.makeText(context, "Por favor, llena todos los campos.", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
-                    enabled = !cargando
-                ) {
-                    Text(if (cargando) "Registrando..." else "Registrarse", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        // Campo: Contraseña
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("Contraseña", fontWeight = FontWeight.Bold, color = darkText, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = contrasena,
+                onValueChange = { contrasena = it },
+                placeholder = { Text("Crea una contraseña segura", color = Color.LightGray) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_view),
+                            contentDescription = "Ver contraseña",
+                            tint = if (passwordVisible) primaryBlue else Color.Gray
+                        )
+                    }
                 }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Checklist de Validación
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                FiltroCheck(texto = "Mínimo 8 caracteres", cumplido = tieneMinimo8, modifier = Modifier.weight(1f))
+                FiltroCheck(texto = "Al menos una mayúscula", cumplido = tieneMayuscula, modifier = Modifier.weight(1f))
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                FiltroCheck(texto = "Al menos un número", cumplido = tieneNumero, modifier = Modifier.weight(1f))
+                FiltroCheck(texto = "Un carácter especial (@,#,etc)", cumplido = tieneEspecial, modifier = Modifier.weight(1f))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Campo: Confirmar Contraseña
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("Confirmar Contraseña", fontWeight = FontWeight.Bold, color = darkText, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = confirmContrasena,
+                onValueChange = { confirmContrasena = it },
+                placeholder = { Text("Repite tu contraseña", color = Color.LightGray) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                visualTransformation = if (confirmPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                isError = confirmContrasena.isNotEmpty() && contrasena != confirmContrasena,
+                trailingIcon = {
+                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_view),
+                            contentDescription = "Ver contraseña",
+                            tint = if (confirmPasswordVisible) primaryBlue else Color.Gray
+                        )
+                    }
+                }
+            )
+            if (confirmContrasena.isNotEmpty() && contrasena != confirmContrasena) {
+                Text("Las contraseñas no coinciden", color = Color.Red, fontSize = 12.sp)
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 5. Enlace al Login
-        Row(horizontalArrangement = Arrangement.Center) {
-            Text("¿Ya tienes una cuenta? ", color = grayText, style = MaterialTheme.typography.bodySmall)
+        // Botón Registrarse (Ajuste a Color Azul Sólido)
+        Button(
+            onClick = {
+                if (formularioValido) {
+                    cargando = true
+                    auth.createUserWithEmailAndPassword(correo, contrasena)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val user = auth.currentUser
+                                Toast.makeText(context, "¡Usuario creado exitosamente!", Toast.LENGTH_SHORT).show()
+                                onRegistroExitoso(user?.uid ?: "", nombre)
+                            } else {
+                                cargando = false
+                                Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                } else {
+                    Toast.makeText(context, "Por favor, completa el formulario correctamente.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            // Se mantiene SIEMPRE azul, sin importar si el formulario está válido o no.
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+            enabled = !cargando // Removemos el bloqueo por "formularioValido" para que el botón no se vea gris
+        ) {
+            Text(if (cargando) "Registrando..." else "Registrarse", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.weight(1f)) // Empuja el enlace hacia el fondo
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Enlace al Login (Restaurado y ajustado al diseño)
+        Row(modifier = Modifier.padding(bottom = 24.dp)) {
+            Text("¿Ya tienes cuenta? ", color = grayText, fontSize = 14.sp)
             Text(
-                text = "Volver al Login",
-                color = primaryBlue,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                "Inicia sesión aquí",
+                color = Color(0xFF2563EB),
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
                 modifier = Modifier.clickable { onVolverLogin() }
             )
         }
+    }
+}
+
+// Sub-componente para el checklist
+@Composable
+fun FiltroCheck(texto: String, cumplido: Boolean, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+        Icon(
+            imageVector = if (cumplido) androidx.compose.material.icons.Icons.Filled.CheckCircle else androidx.compose.material.icons.Icons.Outlined.CheckCircle,
+            contentDescription = null,
+            tint = if (cumplido) Color(0xFF10B981) else Color.LightGray,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(texto, color = if (cumplido) Color(0xFF1E293B) else Color.Gray, fontSize = 10.sp)
     }
 }
 
@@ -1776,7 +1844,11 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun MapaPopabus(onCerrarSesion: () -> Unit) {
+fun MapaPopabus(
+    onCerrarSesion: () -> Unit,
+    onIrALogin: () -> Unit = {},
+    onIrARegistro: () -> Unit = {}
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient =
@@ -2525,12 +2597,35 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                                 val etaMinutos = (distanciaMin / 250f).toInt()
                                 
                                 if (etaMinutos <= 3 && !alertaEmitida) {
-                                    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        vibrator.vibrate(VibrationEffect.createOneShot(5000, VibrationEffect.DEFAULT_AMPLITUDE))
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                        val vibrator = vibratorManager.defaultVibrator
+                                        val effect = VibrationEffect.createOneShot(5000, VibrationEffect.DEFAULT_AMPLITUDE)
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            val attributes = VibrationAttributes.Builder()
+                                                .setUsage(VibrationAttributes.USAGE_ALARM)
+                                                .build()
+                                            vibrator.vibrate(effect, attributes)
+                                        } else {
+                                            val audioAttributes = AudioAttributes.Builder()
+                                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                                .build()
+                                            vibrator.vibrate(effect, audioAttributes)
+                                        }
+                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                                        val effect = VibrationEffect.createOneShot(5000, VibrationEffect.DEFAULT_AMPLITUDE)
+                                        val audioAttributes = AudioAttributes.Builder()
+                                            .setUsage(AudioAttributes.USAGE_ALARM)
+                                            .build()
+                                        vibrator.vibrate(effect, audioAttributes)
                                     } else {
+                                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                                        val audioAttributes = AudioAttributes.Builder()
+                                            .setUsage(AudioAttributes.USAGE_ALARM)
+                                            .build()
                                         @Suppress("DEPRECATION")
-                                        vibrator.vibrate(5000)
+                                        vibrator.vibrate(5000, audioAttributes)
                                     }
                                     alertaEmitida = true // Candado one-shot
                                 }
@@ -2831,7 +2926,9 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                                 "Sugerencias" -> vistaAyudaActual = "SUGERENCIAS"
                                 "Reportar" -> mostrarDialogoIncidencia = true
                             }
-                        }
+                        },
+                        onIrALogin = onIrALogin,
+                        onIrARegistro = onIrARegistro
                     )
                 }
             }
@@ -6611,9 +6708,11 @@ fun PantallaSplash(onSplashTerminado: () -> Unit) {
                     "Bus",
                     fontSize = 32.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = Color(0xFF0D9488)
+                    color = Color(0xFF2563EB)
                 )
             }
+
+
             Spacer(modifier = Modifier.height(6.dp))
             Text("Tu bus, en tiempo real", fontSize = 14.sp, color = Color(0xFF64748B))
 
@@ -6839,10 +6938,38 @@ fun PantallaPlanificaViaje(
 fun PantallaCuentaPasajero(
     onCerrarSesion: () -> Unit,
     onVolverAlInicio: () -> Unit,
-    onOpcionSeleccionada: (String) -> Unit
+    onOpcionSeleccionada: (String) -> Unit,
+    onIrALogin: () -> Unit,
+    onIrARegistro: () -> Unit
 ) {
     // NUEVO: Estado para saber qué mostrar (MENU o NOTIFICACIONES)
     var vistaInterna by remember { mutableStateOf("MENU") }
+
+
+    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+    val usuarioLogueado = currentUser != null
+
+// Estado para guardar el nombre descargado de Realtime Database
+    var nombreUsuario by remember { mutableStateOf("Cargando...") }
+    val correoUsuario = currentUser?.email ?: "Sin correo vinculado"
+
+// LaunchedEffect para consultar el nombre_completo en Firebase
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser?.uid != null) {
+            val database = com.google.firebase.database.FirebaseDatabase.getInstance()
+            database.getReference("usuarios").child(currentUser.uid).child("nombre_completo").get()
+                .addOnSuccessListener { snapshot ->
+                    // Actualiza la variable con el nombre real, o un fallback
+                    nombreUsuario = snapshot.getValue(String::class.java) ?: "Usuario"
+                }
+                .addOnFailureListener {
+                    nombreUsuario = "Usuario"
+                }
+        }
+    }
+
+
+
 
     if (vistaInterna == "NOTIFICACIONES") {
         PantallaNotificaciones(onVolver = { vistaInterna = "MENU" })
@@ -6862,6 +6989,7 @@ fun PantallaCuentaPasajero(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF8FAFC))
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             // TopBar simple
@@ -6877,26 +7005,73 @@ fun PantallaCuentaPasajero(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Tarjeta Azul superior
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2563EB)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            if (usuarioLogueado) {
+                // Tarjeta Azul superior
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2563EB)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(48.dp)) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f) // Evita que un correo largo empuje el botón de Editar
+                        ) {
+                            Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(48.dp)) {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.padding(12.dp))
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // REEMPLAZO EXACTO: Columna apilando nombre y correo dinámicos
+                            Column {
+                                Text(text = nombreUsuario, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(text = correoUsuario, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                            }
+                        }
+
+                        TextButton(onClick = { /* Editar */ }) {
+                            Text("Editar", color = Color.White)
+                        }
+                    }
+                }
+            }else {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(shape = CircleShape, color = Color(0xFFEFF6FF), modifier = Modifier.size(48.dp)) {
                             Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.padding(12.dp))
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Julio Mario", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    }
-                    TextButton(onClick = { /* Editar */ }) {
-                        Text("Editar", color = Color.White)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("No has iniciado sesión", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
+                        Text("Accede para guardar tus rutas y preferencias.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 20.dp))
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = onIrALogin,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                            ) {
+                                Text("Iniciar Sesión")
+                            }
+                            OutlinedButton(
+                                onClick = onIrARegistro,
+                                modifier = Modifier.weight(1f),
+                                border = BorderStroke(1.dp, Color(0xFF2563EB))
+                            ) {
+                                Text("Crear Cuenta", color = Color(0xFF2563EB))
+                            }
+                        }
                     }
                 }
             }
@@ -6905,10 +7080,11 @@ fun PantallaCuentaPasajero(
 
             // Lista de opciones
             val opciones = listOf(
-                "Notificaciones" to Icons.Default.Notifications,
-                "Ayuda" to Icons.Default.Help,
-                "Sugerencias" to Icons.Default.Lightbulb,
-                "Acerca de PopaBus" to Icons.Default.Info
+                "Notificaciones" to Icons.Outlined.Notifications,
+                "Ayuda" to Icons.Outlined.HelpOutline,
+                "Preguntas Frecuentes" to Icons.Outlined.Info,
+                "Sugerencias" to Icons.Outlined.ChatBubbleOutline,
+                "Acerca de PopaBus" to Icons.Outlined.Info
             )
 
             opciones.forEach { (texto, icono) ->
@@ -6941,9 +7117,28 @@ fun PantallaCuentaPasajero(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(icono, contentDescription = null, tint = Color.Gray)
+                            // Cuadro azul claro envolviendo el ícono
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFEFF6FF), // Fondo azul muy claro
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icono,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2563EB), // Color azul fuerte del ícono
+                                    modifier = Modifier.padding(6.dp) // Espaciado interno para ajustar el tamaño del dibujo
+                                )
+                            }
+
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(texto, fontWeight = FontWeight.Medium, color = Color.DarkGray)
+
+                            Text(
+                                text = texto,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                color = Color(0xFF1E293B), // Texto oscuro intenso
+                                fontSize = 16.sp
+                            )
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray)
                     }
@@ -6952,14 +7147,16 @@ fun PantallaCuentaPasajero(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Botón Cerrar Sesión
-            Button(
-                onClick = onCerrarSesion,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = Color(0xFFDC2626)),
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(25.dp)
-            ) {
-                Text("Cerrar Sesión", fontWeight = FontWeight.Bold)
+            if (usuarioLogueado) {
+                // Botón Cerrar Sesión
+                Button(
+                    onClick = onCerrarSesion,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = Color(0xFFDC2626)),
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp)
+                ) {
+                    Text("Cerrar Sesión", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
