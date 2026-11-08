@@ -8,14 +8,14 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.location.Location
-import android.os.Bundle
-import android.os.Looper
-import android.os.Vibrator
-import android.os.VibrationEffect
-import android.os.VibratorManager
-import android.os.VibrationAttributes
 import android.media.AudioAttributes
 import android.os.Build
+import android.os.Bundle
+import android.os.Looper
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -39,8 +39,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -51,21 +53,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsBus
-import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
@@ -73,10 +73,20 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.AltRoute
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.GppGood
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Traffic
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
@@ -131,8 +141,6 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -178,18 +186,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-import androidx.compose.foundation.layout.wrapContentWidth
-
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CheckCircle
-
-
-
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.ShareLocation
+import androidx.compose.material.icons.outlined.DirectionsBus
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CellTower
 
 
 // Representa la ubicación en tiempo real (BusesActivos)
@@ -1344,7 +1347,7 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
         sheetDragHandle = { BottomSheetDefaults.DragHandle() },
         sheetContent = {
             Column(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 0.dp),
                 horizontalAlignment = Alignment.Start
             ) {
                 Row(
@@ -1359,7 +1362,7 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (!enRecorrido) "Listo para conducir" else "Recorrido en curso",
                             style = MaterialTheme.typography.titleLarge,
@@ -1532,151 +1535,243 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+// --- PANEL DE REPORTES DEL CONDUCTOR ---
 
-                // Fila 1 de Reportes
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = {
-                            contadorAlertas++
-                            val incidencia = IncidenciaOficial(
-                                id_usuario = auth.currentUser?.uid ?: "",
-                                descripcion = "Trancón",
-                                estado = "pendiente",
-                                fecha_reporte = System.currentTimeMillis()
-                            )
-                            database.getReference("incidencias").push()
-                                .setValue(incidencia)
-                            Toast.makeText(
-                                context,
-                                "Trancón reportado",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        modifier = Modifier.weight(1f).padding(end = 6.dp)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(
-                                0xFFFFF7ED
-                            ), contentColor = Color(0xFFC2410C)
-                        )
-                    ) {
-                        Text("🚦  Trancón")
-                    }
-                    Button(
-                        onClick = {
-                            contadorAlertas++
-                            val incidencia = IncidenciaOficial(
-                                id_usuario = auth.currentUser?.uid ?: "",
-                                descripcion = "Desvío",
-                                estado = "pendiente",
-                                fecha_reporte = System.currentTimeMillis()
-                            )
-                            database.getReference("incidencias").push()
-                                .setValue(incidencia)
-                            Toast.makeText(
-                                context,
-                                "Desvío reportado",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        modifier = Modifier.weight(1f).padding(start = 6.dp)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(
-                                0xFFFEFCE8
-                            ), contentColor = Color(0xFFA16207)
-                        )
-                    ) {
-                        Text("🔄  Desvío")
-                    }
+            Spacer(modifier = Modifier.height(8.dp))
+            Column(modifier = Modifier.fillMaxWidth()) {
+
+// --- PANEL DE REPORTES DEL CONDUCTOR (Refactorización Premium) ---
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Reportar Novedad",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B)
+                    )
+                    Text(
+                        text = "Toque una opción",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp)) {
+                    // --- Fila 1: Trancón y Desvío ---
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        // TRANCÓN (Naranja)
+                        Surface(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Trancón",
+                                    estado = "pendiente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Reporte enviado: Trancón", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFF97316), // Naranja sólido del diseño
+                            modifier = Modifier.weight(1f).height(64.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.White.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Outlined.Traffic, // Semáforo/Trancón
+                                        contentDescription = "Trancón",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Trancón", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
 
-                // Fila 2 de Reportes
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = {
-                            contadorAlertas++
-                            val incidencia = IncidenciaOficial(
-                                id_usuario = auth.currentUser?.uid ?: "",
-                                descripcion = "Fallo Mecánico",
-                                estado = "pendiente",
-                                fecha_reporte = System.currentTimeMillis()
-                            )
-                            database.getReference("incidencias").push()
-                                .setValue(incidencia)
-                            Toast.makeText(
-                                context,
-                                "Fallo reportado",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        modifier = Modifier.weight(1f).padding(end = 6.dp)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(
-                                0xFFF1F5F9
-                            ), contentColor = Color(0xFF475569)
-                        )
-                    ) {
-                        Text("🔧  Fallo")
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // DESVÍO (Amarillo)
+                        Surface(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Desvío",
+                                    estado = "pendiente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Reporte enviado: Desvío", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFEAB308), // Amarillo oro del diseño
+                            modifier = Modifier.weight(1f).height(64.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.White.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Outlined.AltRoute,
+                                        contentDescription = "Desvío",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Desvío", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
                     }
-                    Button(
-                        onClick = {
-                            contadorAlertas++
-                            val incidencia = IncidenciaOficial(
-                                id_usuario = auth.currentUser?.uid ?: "",
-                                descripcion = "Pánico / Emergencia",
-                                estado = "urgente",
-                                fecha_reporte = System.currentTimeMillis()
-                            )
-                            database.getReference("incidencias").push()
-                                .setValue(incidencia)
-                            Toast.makeText(
-                                context,
-                                "Alerta de pánico enviada",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        },
-                        modifier = Modifier.weight(1f).padding(start = 6.dp)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(
-                                0xFFFEF2F2
-                            ), contentColor = Color(0xFFB91C1C)
-                        )
-                    ) {
-                        Text("🚨  Pánico")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // --- Fila 2: Fallo y Pánico ---
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        // FALLO (Gris Pizarra)
+                        Surface(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Fallo",
+                                    estado = "pendiente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Reporte enviado: Fallo", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFF64748B), // Gris Pizarra sólido
+                            modifier = Modifier.weight(1f).height(64.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.White.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Outlined.Build,
+                                        contentDescription = "Fallo",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Fallo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // PÁNICO (Rojo)
+                        Surface(
+                            onClick = {
+                                contadorAlertas++
+                                val uid = auth.currentUser?.uid ?: ""
+                                val nuevaIncidencia = IncidenciaOficial(
+                                    id_usuario = uid,
+                                    descripcion = "Pánico",
+                                    estado = "urgente",
+                                    fecha_reporte = System.currentTimeMillis()
+                                )
+                                database.getReference("incidencias").push().setValue(nuevaIncidencia).addOnSuccessListener {
+                                    Toast.makeText(context, "Alerta enviada: Pánico", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFEF4444), // Rojo sólido
+                            modifier = Modifier.weight(1f).height(64.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.White.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Outlined.Warning,
+                                        contentDescription = "Pánico",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Pánico", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Botón Cerrar Sesión minimalista
-                OutlinedButton(
+                // Botón de Cerrar Sesión (Diseño Figma)
+                Button(
                     onClick = {
                         transmitiendo = false
                         val intent = Intent(context, ServicioGpsConductor::class.java)
                         context.stopService(intent)
                         onCerrarSesion()
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color(
-                            0xFFF8FAFC
-                        ), contentColor = Color(0xFF334155)
-                    ),
-                    border = null
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF27313E) // Gris oscuro/azulado exacto
+                    )
                 ) {
-                    Text("→] Cerrar Sesión", fontWeight = FontWeight.SemiBold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ExitToApp,
+                            contentDescription = "Cerrar Sesión",
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Cerrar Sesión",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(10.dp))
             }
         }
     ) { paddingValues ->
@@ -1771,33 +1866,93 @@ fun PantallaConductor(onCerrarSesion: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Aquí iría tu logo de PopaBus
-                Row(verticalAlignment = Alignment.CenterVertically) {
+// CABECERA UNIFICADA FLOTANTE (Diseño Premium)
+                Box(
+                    modifier = Modifier
+
+
+                        .fillMaxWidth()
+                        .padding(horizontal = 5.dp) // Mantiene solo los márgenes laterales
+                        .offset(y = (-90).dp) // El valor negativo "jala" la barra hacia arriba a la fuerza
+                        .zIndex(1f) // Para que flote sobre el mapa si estás usando Box
+                ) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF2563EB),
-                        modifier = Modifier.size(32.dp)
+                        shape = RoundedCornerShape(50), // Forma de píldora para toda la barra
+                        color = Color.White,
+                        shadowElevation = 8.dp, // Sombra suave
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
                     ) {
-                        Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.padding(4.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 1. Logo
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFF2563EB),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Filled.DirectionsBus,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            // 2. Título Bicolor
+                            Text(
+                                text = "Popa",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E293B),
+                                fontSize = 20.sp
+                            )
+                            Text(
+                                text = "Bus",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2563EB), // Mismo azul del logo
+                                fontSize = 20.sp
+                            )
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            // 3. Píldora de Estado Dinámica (Tu lógica intacta)
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = if (enRecorrido) Color(0xFFEFF6FF) else Color(0xFFECFDF5), // Azul o verde claro
+                                modifier = Modifier.padding(end = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Punto de conexión
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(
+                                                if (enRecorrido) Color(0xFF2563EB) else Color(0xFF10B981),
+                                                CircleShape
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    // Texto de estado
+                                    Text(
+                                        text = if (enRecorrido) "En recorrido" else "Disponible",
+                                        color = if (enRecorrido) Color(0xFF1E3A8A) else Color(0xFF0D9488),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Popa",
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B),
-                        fontSize = 20.sp
-                    )
-                    Text(
-                        "Bus",
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0D9488),
-                        fontSize = 20.sp
-                    )
                 }
 
                 // Píldora de estado
@@ -3224,6 +3379,80 @@ fun VistaActividad(
     }
 }
 
+@Composable
+fun PaginacionGestionesAdmin(
+    indiceActual: Int,
+    totalGestiones: Int,
+    nombreGestionActual: String,
+    onAnterior: () -> Unit,
+    onSiguiente: () -> Unit
+) {
+    // Contenedor principal con fondo blanco
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Botón Flecha Izquierda
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFF8FAFC), // Fondo gris/celeste muy claro
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)), // Borde sutil
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable { onAnterior() }
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Anterior",
+                    tint = Color(0xFF2563EB), // Azul corporativo
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+
+            // Textos Centrales
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "$indiceActual de $totalGestiones",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B) // Texto oscuro
+                )
+                Text(
+                    text = nombreGestionActual,
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B) // Texto gris
+                )
+            }
+
+            // Botón Flecha Derecha
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable { onSiguiente() }
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Siguiente",
+                    tint = Color(0xFF2563EB),
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
@@ -3258,134 +3487,35 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
 // --- NUEVO: ESTRUCTURA SCAFFOLD PARA LA BARRA INFERIOR ---
     Scaffold(
         bottomBar = {
-            // SOLO mostramos la barra si NO estamos en el Menú principal
             if (subPantalla != "MENU") {
-                NavigationBar(
-                    containerColor = Color.White,
-                    tonalElevation = 4.dp
-                ) {
-                    NavigationBarItem(
-                        icon = {
-                            Box(contentAlignment = Alignment.TopCenter) {
-                                // La línea azul condicional
-                                if (subPantalla == "MENU") {
-                                    Box(
-                                        modifier = Modifier
-                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
-                                            .width(32.dp)
-                                            .height(3.dp)
-                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
-                                    )
-                                }
-                                // El ícono estático debajo
-                                Icon(Icons.Outlined.Home, contentDescription = "Inicio")
-                            }
-                        },
-                        label = { Text("Inicio", fontSize = 10.sp) },
-                        selected = subPantalla == "MENU",
-                        onClick = { subPantalla = "MENU" },
-
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
-                            selectedIconColor = Color(0xFF2563EB),
-                            unselectedIconColor = Color.Gray,
-                            selectedTextColor = Color(0xFF2563EB),
-                            unselectedTextColor = Color.Gray
-                        )
-                    )
-
-
-                    // Atajo 2: Reportes
-                    NavigationBarItem(
-                        icon = {
-                            Box(contentAlignment = Alignment.TopCenter) {
-                                // La línea azul condicional
-                                if (subPantalla == "REPORTES") {
-                                    Box(
-                                        modifier = Modifier
-                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
-                                            .width(32.dp)
-                                            .height(3.dp)
-                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
-                                    )
-                                }
-                                // El ícono estático debajo
-                                Icon(Icons.Default.Inbox, contentDescription = "Reportes")
-                            }
-                        },
-                        label = { Text("Reportes", fontSize = 10.sp) },
-                        selected = subPantalla == "REPORTES",
-                        onClick = { subPantalla = "REPORTES" },
-
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
-                            selectedIconColor = Color(0xFF2563EB),
-                            unselectedIconColor = Color.Gray,
-                            selectedTextColor = Color(0xFF2563EB),
-                            unselectedTextColor = Color.Gray
-                        )
-                    )
-
-                    // Atajo 3: Mapa (Torre de Control)
-                    NavigationBarItem(
-
-                        icon = {
-                            Box(contentAlignment = Alignment.TopCenter) {
-                                // La línea azul condicional
-                                if (subPantalla == "TORRE_CONTROL") {
-                                    Box(
-                                        modifier = Modifier
-                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
-                                            .width(32.dp)
-                                            .height(3.dp)
-                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
-                                    )
-                                }
-                                // El ícono estático debajo
-                                Icon(Icons.Default.LocationOn, contentDescription = "Mapa")
-                            }
-                        },
-                        label = { Text("Mapa", fontSize = 10.sp) },
-                        selected = subPantalla == "TORRE_CONTROL",
-                        onClick = { subPantalla = "TORRE_CONTROL" },
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
-                            selectedIconColor = Color(0xFF2563EB),
-                            unselectedIconColor = Color.Gray,
-                            selectedTextColor = Color(0xFF2563EB),
-                            unselectedTextColor = Color.Gray
-                        )
-                    )
-                    // Atajo 4: Informes
-                    NavigationBarItem(
-                        icon = {
-                            Box(contentAlignment = Alignment.TopCenter) {
-                                // La línea azul condicional
-                                if (subPantalla == "INFORMES") {
-                                    Box(
-                                        modifier = Modifier
-                                            .offset(y = (-16).dp) // Ajusta este número (ej. -12.dp o -18.dp) hasta que toque el borde
-                                            .width(32.dp)
-                                            .height(3.dp)
-                                            .background(Color(0xFF2563EB), RoundedCornerShape(50))
-                                    )
-                                }
-                                // El ícono estático debajo
-                                Icon(Icons.Default.BarChart, contentDescription = "Informes")
-                            }
-                        },
-                        label = { Text("Informes", fontSize = 10.sp) },
-                        selected = subPantalla == "INFORMES",
-                        onClick = { subPantalla = "INFORMES" },
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent, // Esto elimina el fondo gris/azul oscuro
-                            selectedIconColor = Color(0xFF2563EB),
-                            unselectedIconColor = Color.Gray,
-                            selectedTextColor = Color(0xFF2563EB),
-                            unselectedTextColor = Color.Gray
-                        )
-                    )
+                val gestionesAdmin = listOf("PARADEROS", "RUTAS", "BUSES", "USUARIOS", "REPORTES", "INFORMES", "TORRE_CONTROL")
+                val indice = gestionesAdmin.indexOf(subPantalla) + 1
+                val total = gestionesAdmin.size
+                
+                val nombreActual = when (subPantalla) {
+                    "PARADEROS" -> "Gestión de Paraderos"
+                    "RUTAS" -> "Gestión de Rutas"
+                    "BUSES" -> "Gestión de Buses"
+                    "USUARIOS" -> "Gestión de Usuarios"
+                    "REPORTES" -> "Gestión de Reportes"
+                    "INFORMES" -> "Gestión de Informes"
+                    "TORRE_CONTROL" -> "Torre de Control"
+                    else -> subPantalla.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
                 }
+
+                PaginacionGestionesAdmin(
+                    indiceActual = indice,
+                    totalGestiones = total,
+                    nombreGestionActual = nombreActual,
+                    onAnterior = { 
+                        val nuevoIndice = if (indice - 1 < 1) total else indice - 1
+                        subPantalla = gestionesAdmin[nuevoIndice - 1]
+                    },
+                    onSiguiente = { 
+                        val nuevoIndice = if (indice + 1 > total) 1 else indice + 1
+                        subPantalla = gestionesAdmin[nuevoIndice - 1]
+                    }
+                )
             }
         }
     ) { paddingValues ->
@@ -3402,8 +3532,8 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                 start = 24.dp,
                                 end = 24.dp,
                                 top = 24.dp,
-                                // Reducimos el padding inferior drásticamente porque el Scaffold ya apartó espacio
-                                bottom = 0.dp
+                                // Damos margen inferior para que el último botón quede cómodamente scrolleable
+                                bottom = 24.dp
                             )
                             .verticalScroll(rememberScrollState())
                     ) {
@@ -3506,7 +3636,7 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                         modifier = Modifier.size(40.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Person,
+                                            imageVector = Icons.Outlined.PersonOutline,
                                             contentDescription = null,
                                             tint = Color(0xFF3B82F6),
                                             modifier = Modifier.padding(10.dp)
@@ -3536,12 +3666,15 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                         color = Color(0xFFEFF6FF),
                                         modifier = Modifier.size(40.dp)
                                     ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text("📍", fontSize = 16.sp)
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Outlined.Place,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.padding(10.dp)
+                                        )
                                     }
                                     Text(
-                                        "Gestionar Paraderos",
+                                        "Paraderos",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = Color(0xFF1E293B),
@@ -3568,12 +3701,15 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                         color = Color(0xFFEFF6FF),
                                         modifier = Modifier.size(40.dp)
                                     ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text("🗺️", fontSize = 16.sp)
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Outlined.ShareLocation,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.padding(10.dp)
+                                        )
                                     }
                                     Text(
-                                        "Gestionar Rutas",
+                                        "Rutas",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = Color(0xFF1E293B),
@@ -3597,14 +3733,14 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                         modifier = Modifier.size(40.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.DirectionsBus,
+                                            imageVector = Icons.Outlined.DirectionsBus,
                                             contentDescription = null,
                                             tint = Color(0xFF3B82F6),
                                             modifier = Modifier.padding(10.dp)
                                         )
                                     }
                                     Text(
-                                        "Gestionar Buses",
+                                        "Buses",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = Color(0xFF1E293B),
@@ -3631,12 +3767,15 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                         color = Color(0xFFEFF6FF),
                                         modifier = Modifier.size(40.dp)
                                     ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text("📥", fontSize = 16.sp)
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Outlined.Inbox,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.padding(10.dp)
+                                        )
                                     }
                                     Text(
-                                        "Buzón de Reportes",
+                                        "Reportes",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = Color(0xFF1E293B),
@@ -3659,12 +3798,15 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                         color = Color(0xFFEFF6FF),
                                         modifier = Modifier.size(40.dp)
                                     ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text("📊", fontSize = 16.sp)
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Outlined.BarChart,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.padding(10.dp)
+                                        )
                                     }
                                     Text(
-                                        "Gestión de Informes",
+                                        "Informes",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = Color(0xFF1E293B),
@@ -3694,17 +3836,21 @@ fun PantallaAdministrador(onCerrarSesion: () -> Unit) {
                                     color = Color(0xFFE0E7FF),
                                     modifier = Modifier.size(40.dp)
                                 ) {
-                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Text("📡", fontSize = 16.sp)
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Outlined.CellTower,
+                                        contentDescription = null,
+                                        tint = Color(0xFF3B82F6),
+                                        modifier = Modifier.padding(10.dp)
+                                    )
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column {
                                     Text("MONITOREO EN TIEMPO REAL", color = Color(0xFF0D9488), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    Text("Torre de Control - Mapa", color = Color(0xFF1E293B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("Torre de Control", color = Color(0xFF1E293B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Spacer(modifier = Modifier.weight(1f))
 
@@ -6127,13 +6273,13 @@ fun MapaGeneralAdmin(onVolver: () -> Unit) {
                     ) {
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = if (sinSenal) Color(0xFFE53935) else Color.White
+                                containerColor = Color.White
                             ),
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Text(
                                 text = if (sinSenal) "Señal Perdida" else titulo,
-                                color = if (sinSenal) Color.White else Color(0xFF0F172A),
+                                color = if (sinSenal) Color(0xFF333333) else Color(0xFF0F172A),
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
@@ -6147,15 +6293,15 @@ fun MapaGeneralAdmin(onVolver: () -> Unit) {
                             modifier = Modifier
                                 .size(36.dp)
                                 .background(
-                                    color = if (sinSenal) Color(0xFFE53935) else Color(0xFF3B82F6),
+                                    color = if (sinSenal) Color.White else Color(0xFF3B82F6),
                                     shape = CircleShape
                                 )
-                                .border(2.dp, Color.White, CircleShape)
+                                .border(2.dp, if (sinSenal) Color.Gray else Color.White, CircleShape)
                         ) {
                             Icon(
-                                imageVector = if (sinSenal) Icons.Default.Warning else Icons.Default.DirectionsBus,
+                                imageVector = Icons.Default.DirectionsBus,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = if (sinSenal) Color(0xFF333333) else Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -7147,15 +7293,31 @@ fun PantallaCuentaPasajero(
 
             Spacer(modifier = Modifier.weight(1f))
 
+// 4. EL BOTÓN ROJO SOLO APARECE SI ESTÁ LOGUEADO
             if (usuarioLogueado) {
-                // Botón Cerrar Sesión
                 Button(
                     onClick = onCerrarSesion,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFEE2E2), contentColor = Color(0xFFDC2626)),
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(25.dp)
                 ) {
-                    Text("Cerrar Sesión", fontWeight = FontWeight.Bold)
+                    // Row para poner el ícono y el texto uno al lado del otro
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ExitToApp,
+                            contentDescription = "Cerrar Sesión",
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Cerrar Sesión",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
