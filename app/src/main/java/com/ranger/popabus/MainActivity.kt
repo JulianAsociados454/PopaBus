@@ -131,6 +131,9 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 // Representa la ubicación en tiempo real (BusesActivos)
 data class BusActivo(
     val latitud: Double = 0.0,
@@ -1282,6 +1285,24 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
     var menuSugerenciasExpandido by remember { mutableStateOf(false) }
     var paraderoSeleccionadoBusqueda by remember { mutableStateOf<com.ranger.popabus.network.ParaderoRespuesta?>(null) }
     val focusManager = LocalFocusManager.current
+    val guardarBusquedaEnHistorial: (String) -> Unit = { destino ->
+        if (destino.isNotBlank()) {
+            coroutineScope.launch {
+                try {
+                    val usuarioId = if (correoGuardado.isNotEmpty()) correoGuardado else "anonimo"
+                    com.ranger.popabus.network.RetrofitClient.apiService.crearHistorialBusqueda(
+                        com.ranger.popabus.network.HistorialBusquedaRespuesta(
+                            id_usuario = usuarioId,
+                            destino_buscado = destino,
+                            fecha_busqueda = System.currentTimeMillis()
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e("HistorialBusq", "Error guardando historial: ${e.message}")
+                }
+            }
+        }
+    }
 
     val popayan = LatLng(2.4419, -76.6063)
     val cameraPositionState = rememberCameraPositionState {
@@ -1377,7 +1398,21 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     NavigationDrawerItem(label = { Text("Sugerencias") }, selected = false, onClick = { vistaAyudaActual = "SUGERENCIAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
                     NavigationDrawerItem(label = { Text("Acerca De") }, selected = false, onClick = { vistaAyudaActual = "ACERCA"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
                     NavigationDrawerItem(label = { Text("Preguntas Frecuentes") }, selected = false, onClick = { vistaAyudaActual = "PREGUNTAS"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
-                    NavigationDrawerItem(label = { Text("Actividad (Historial)") }, icon = { Text("⏱️") }, selected = false, onClick = { vistaAyudaActual = "ACTIVIDAD"; coroutineScope.launch { drawerState.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
+                    NavigationDrawerItem(
+                        label = { Text("Historial de Abordaje") },
+                        icon = { Text("⏱️") },
+                        selected = false,
+                        onClick = {
+                            if (correoGuardado.isEmpty()) {
+                                Toast.makeText(context, "Debes iniciar sesión para ver tu historial", Toast.LENGTH_LONG).show()
+                                onCerrarSesion()
+                            } else {
+                                vistaAyudaActual = "ACTIVIDAD"
+                                coroutineScope.launch { drawerState.close() }
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
                     NavigationDrawerItem(label = { Text("Historial de Búsquedas") },
                         selected = false,
                         onClick = {
@@ -1504,24 +1539,19 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                             label = { Text("¿A dónde vas?") },
                             modifier = Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.95f), RoundedCornerShape(12.dp)),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    guardarBusquedaEnHistorial(textoBusqueda)
+                                    focusManager.clearFocus()
+                                    menuSugerenciasExpandido = false
+                                }
+                            ),
                             trailingIcon = {
                                 if (textoBusqueda.isNotEmpty()) {
                                     IconButton(onClick = {
-                                        if (textoBusqueda.isNotBlank()) {
-                                            coroutineScope.launch {
-                                                try {
-                                                    val uid = "anonimo" // O tu auth
-                                                    com.ranger.popabus.network.RetrofitClient.apiService.crearHistorialBusqueda(
-                                                        com.ranger.popabus.network.HistorialBusquedaRespuesta(
-                                                            id_usuario = uid,
-                                                            destino_buscado = textoBusqueda,
-                                                            fecha_busqueda = System.currentTimeMillis()
-                                                        )
-                                                    )
-                                                } catch (e: Exception) { Log.e("HistorialBusq", "Error: ${e.message}") }
-                                            }
-                                        }
-                                        textoBusqueda = ""; menuSugerenciasExpandido = false
+                                        textoBusqueda = ""
+                                        menuSugerenciasExpandido = false
                                     }) { Text("❌") }
                                 }
                             }
@@ -1539,6 +1569,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                                         DropdownMenuItem(
                                             text = { Text("📍 Paradero: ${paradero.nombre}") },
                                             onClick = {
+                                                guardarBusquedaEnHistorial(paradero.nombre)
                                                 textoBusqueda = paradero.nombre
                                                 menuSugerenciasExpandido = false
                                                 paraderoSeleccionadoBusqueda = paradero
@@ -1553,6 +1584,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                                         DropdownMenuItem(
                                             text = { Text("🚌 Ruta: ${ruta.nombre_ruta}") },
                                             onClick = {
+                                                guardarBusquedaEnHistorial(ruta.nombre_ruta)
                                                 textoBusqueda = ""
                                                 menuSugerenciasExpandido = false
                                                 rutaSeleccionada = ruta
@@ -1578,7 +1610,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                 // 3. BOTONES FLOTANTES (SOS y Abordaje)
                 if (rutaSeleccionada == null) {
                     FloatingActionButton(
-                        onClick = { mostrarDialogoPanico = true },
+                        onClick = { mostrarDialogoPanico = true }, 
                         modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 96.dp, end = 16.dp),
                         containerColor = Color.Red
                     ) { Text("SOS", color = Color.White) }
@@ -1587,6 +1619,11 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                         onClick = {
                             rastreandoAbordaje = !rastreandoAbordaje
                             val intentRastreo = Intent(context, ServicioRastreoPasajero::class.java)
+
+                            // --- NUEVA LÍNEA CLAVE ---
+                            // Le enviamos al servicio el ID del usuario que está abordando
+                            intentRastreo.putExtra("ID_USUARIO", if (correoGuardado.isNotEmpty()) correoGuardado else "anonimo")
+
                             if (rastreandoAbordaje) ContextCompat.startForegroundService(context, intentRastreo)
                             else context.stopService(intentRastreo)
                         },
@@ -1654,7 +1691,7 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     var listaActividades by remember { mutableStateOf<List<com.ranger.popabus.network.ActividadRespuesta>>(emptyList()) }
                     LaunchedEffect(Unit) {
                         try {
-                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerActividades("anonimo")
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerActividades(correoGuardado)
                             if (respuesta.isSuccessful) listaActividades = respuesta.body() ?: emptyList()
                         } catch (e: Exception) {}
                     }
@@ -1666,7 +1703,8 @@ fun MapaPopabus(onCerrarSesion: () -> Unit) {
                     var listaBusquedas by remember { mutableStateOf<List<com.ranger.popabus.network.HistorialBusquedaRespuesta>>(emptyList()) }
                     LaunchedEffect(Unit) {
                         try {
-                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerHistorialBusquedas("anonimo")
+                            val usuarioId = if (correoGuardado.isNotEmpty()) correoGuardado else "anonimo"
+                            val respuesta = com.ranger.popabus.network.RetrofitClient.apiService.obtenerHistorialBusquedas(usuarioId)
                             if (respuesta.isSuccessful) listaBusquedas = respuesta.body() ?: emptyList()
                         } catch (e: Exception) {}
                     }

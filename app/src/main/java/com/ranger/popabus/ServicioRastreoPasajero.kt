@@ -29,7 +29,7 @@ class ServicioRastreoPasajero : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private var wakeLock: PowerManager.WakeLock? = null
-
+    private var idUsuario: String = "anonimo"
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
 
@@ -54,6 +54,9 @@ class ServicioRastreoPasajero : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        idUsuario = intent?.getStringExtra("ID_USUARIO") ?: "anonimo"
+
         val notificacion = NotificationCompat.Builder(this, "CANAL_RASTREO_PASAJERO")
             .setContentTitle("POPABUS: Calculando abordaje")
             .setContentText("Buscando en qué bus estás viajando...")
@@ -130,7 +133,7 @@ class ServicioRastreoPasajero : Service() {
                         Log.d("RastreoAbordaje", "Pasajero cerca de $idBus: $conteoActual/12 (${distancia}m)")
 
                         // 12 ciclos * 5 segundos = ~60 segundos constantes junto al bus
-                        if (conteoActual >= 12) {
+                        if (conteoActual >= 2) {
                             registrarAbordajeAutomatico(idBus)
                             break
                         }
@@ -151,8 +154,8 @@ class ServicioRastreoPasajero : Service() {
 
     private fun registrarAbordajeAutomatico(idBus: String) {
         yaRegistrado = true
-        // Usamos el usuario actual, o "anonimo" si no hay login
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "anonimo"
+
+        val uid = idUsuario
 
         serviceScope.launch {
             try {
